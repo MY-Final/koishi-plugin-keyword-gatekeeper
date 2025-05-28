@@ -2,7 +2,7 @@ import { Context } from 'koishi'
 import { KeywordHandler } from './handlers/keyword-handler'
 import { ConfigSchema } from './types'
 
-export const name = 'message-guard'
+export const name = 'keyword-gatekeeper'
 
 // 导出配置模式
 export const Config = ConfigSchema
