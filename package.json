@@ -1,0 +1,31 @@
+{
+  "name": "koishi-plugin-message-guard",
+  "description": "检测并撤回包含关键词的消息，进行禁言或踢出群聊",
+  "version": "0.0.1",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "files": [
+    "lib",
+    "dist"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [
+    "chatbot",
+    "koishi",
+    "plugin",
+    "message",
+    "guard",
+    "keywords",
+    "filter"
+  ],
+  "devDependencies": {
+    "koishi-plugin-adapter-onebot": "^6.8.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "koishi": "^4.18.7"
+  }
+}
