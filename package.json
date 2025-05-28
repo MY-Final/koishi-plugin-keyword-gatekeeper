@@ -1,5 +1,5 @@
 {
-  "name": "koishi-plugin-message-guard",
+  "name": "koishi-plugin-keyword-gatekeeper",
   "description": "检测并撤回包含关键词的消息，进行禁言或踢出群聊",
   "version": "0.0.1",
   "main": "lib/index.js",
@@ -11,6 +11,15 @@
   "license": "MIT",
   "scripts": {
     "build": "tsc"
+  },
+  "author": {
+    "name": "Final",
+    "email": "your-email@example.com",
+    "url": "https://github.com/MY-Final"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MY-Final/koishi-plugin-message-guard.git"
   },
   "keywords": [
     "chatbot",
