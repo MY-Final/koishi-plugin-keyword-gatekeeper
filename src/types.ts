@@ -16,6 +16,12 @@ export interface Config {
   mute: boolean
   muteDuration: number
   customMessage: string
+  // 网址检测相关配置
+  detectUrls: boolean
+  urlWhitelist: string[]
+  urlAction: 'recall' | 'mute' | 'both'
+  urlMuteDuration: number
+  urlCustomMessage: string
 }
 
 // 配置模式
@@ -40,5 +46,25 @@ export const ConfigSchema: Schema<Config> = Schema.object({
     .default(600),
   customMessage: Schema.string()
     .description('检测到关键词后的提示消息（留空则不发送提示）')
-    .default('检测到违规内容，已进行处理')
+    .default('检测到违规内容，已进行处理'),
+  // 网址检测相关配置
+  detectUrls: Schema.boolean()
+    .description('是否检测网址')
+    .default(true),
+  urlWhitelist: Schema.array(String)
+    .description('网址白名单（不会被检测的域名，如：example.com）')
+    .default([]),
+  urlAction: Schema.union([
+    Schema.const('recall').description('仅撤回消息'),
+    Schema.const('mute').description('仅禁言用户'),
+    Schema.const('both').description('撤回消息并禁言用户')
+  ])
+    .description('检测到网址后的操作')
+    .default('both'),
+  urlMuteDuration: Schema.number()
+    .description('检测到网址后的禁言时长（秒）')
+    .default(300),
+  urlCustomMessage: Schema.string()
+    .description('检测到网址后的提示消息（留空则不发送提示）')
+    .default('检测到未经允许的网址链接，已进行处理')
 })

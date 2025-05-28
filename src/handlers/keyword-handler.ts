@@ -1,12 +1,12 @@
 import { Session, h } from 'koishi'
 import { MessageHandler } from './base-handler'
-import { Config } from '../types'
+import { Config as PluginConfig } from '../types'
 import type { OneBot } from 'koishi-plugin-adapter-onebot'
 
 // 关键词处理器
 export class KeywordHandler extends MessageHandler {
   // 检查是否包含关键词
-  checkKeywords(message: string, keywords: string[]): string | null {
+  checkKeywords(message: string, keywords: string[], config: PluginConfig): string | null {
     if (!keywords || keywords.length === 0) return null
 
     const lowerMessage = message.toLowerCase()
@@ -15,8 +15,8 @@ export class KeywordHandler extends MessageHandler {
 
       try {
         // 使用正则表达式匹配
-        if (this.ctx.config.useRegex) {
-          const flags = this.ctx.config.regexFlags || 'i'
+        if (config.useRegex) {
+          const flags = config.regexFlags || 'i'
           const regex = new RegExp(keyword, flags)
           if (regex.test(message)) {
             return keyword
@@ -149,12 +149,12 @@ export class KeywordHandler extends MessageHandler {
   }
 
   // 处理关键词检测
-  async handleKeywordDetection(meta: Session, config: Config): Promise<boolean> {
+  async handleKeywordDetection(meta: Session, config: PluginConfig): Promise<boolean> {
     // 获取消息内容
     const message = this.getMessageContent(meta)
 
     // 检查是否包含关键词
-    const matchedKeyword = this.checkKeywords(message, config.keywords)
+    const matchedKeyword = this.checkKeywords(message, config.keywords, config)
     if (!matchedKeyword) return false
 
     // 检查机器人权限
