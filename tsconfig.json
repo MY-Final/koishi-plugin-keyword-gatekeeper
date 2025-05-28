@@ -2,7 +2,7 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "lib",
-    "target": "es2022",
+    "target": "es2020",
     "module": "commonjs",
     "declaration": true,
     "emitDeclarationOnly": false,
@@ -13,6 +13,8 @@
     "moduleResolution": "node",
     "jsx": "react-jsx",
     "jsxImportSource": "@satorijs/element",
+    "strict": false,
+    "forceConsistentCasingInFileNames": true,
     "types": [
       "node"
     ]

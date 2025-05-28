@@ -10,7 +10,8 @@
   ],
   "license": "MIT",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc -b",
+    "lint": "eslint --ext .ts src"
   },
   "author": {
     "name": "Final",
