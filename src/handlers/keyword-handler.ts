@@ -60,14 +60,18 @@ export class KeywordHandler extends MessageHandler {
 
   // 格式化禁言时间
   formatDuration(seconds: number): string {
+    if (seconds < 60) return `${seconds}秒`
+
     const hours = Math.floor(seconds / 3600)
-    const minutes = Math.ceil((seconds % 3600) / 60)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const remainingSeconds = seconds % 60
 
     let durationText = ''
     if (hours > 0) durationText += `${hours}小时`
     if (minutes > 0) durationText += `${minutes}分钟`
+    if (remainingSeconds > 0) durationText += `${remainingSeconds}秒`
 
-    return durationText || '1分钟'
+    return durationText
   }
 
   // 禁言用户
