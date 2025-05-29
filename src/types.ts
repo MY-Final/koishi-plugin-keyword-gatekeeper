@@ -7,6 +7,13 @@ export interface KeywordConfig {
   flags?: string
 }
 
+// 处罚记录
+export interface PunishmentRecord {
+  userId: string
+  count: number
+  lastTriggerTime: number
+}
+
 // 配置接口
 export interface Config {
   keywords: string[]
@@ -22,6 +29,12 @@ export interface Config {
   urlAction: 'recall' | 'mute' | 'both'
   urlMuteDuration: number
   urlCustomMessage: string
+  // 自动处罚机制
+  enableAutoPunishment: boolean
+  secondViolationMuteDuration: number
+  maxViolationCount: number
+  kickOnMaxViolation: boolean
+  punishmentResetHours: number
 }
 
 // 配置模式
@@ -74,5 +87,28 @@ export const ConfigSchema: Schema<Config> = Schema.object({
     .default(300),
   urlCustomMessage: Schema.string()
     .description('检测到非白名单网址后的提示消息，留空则不发送提示')
-    .default('检测到未经允许的网址链接，已进行处理')
+    .default('检测到未经允许的网址链接，已进行处理'),
+
+  // 自动处罚机制分组
+  enableAutoPunishment: Schema.boolean()
+    .description('是否启用自动处罚机制，根据用户触发次数自动升级处罚等级')
+    .default(false),
+  secondViolationMuteDuration: Schema.number()
+    .description('第二次违规的禁言时长（秒），默认为60秒')
+    .min(10)
+    .max(2592000) // 30天上限
+    .default(60),
+  maxViolationCount: Schema.number()
+    .description('最大违规次数，达到此次数后将执行最终处罚（踢出或长时间禁言）')
+    .min(2)
+    .max(10)
+    .default(3),
+  kickOnMaxViolation: Schema.boolean()
+    .description('达到最大违规次数时是否踢出用户（如果设为false，则仅禁言）')
+    .default(true),
+  punishmentResetHours: Schema.number()
+    .description('处罚记录重置时间（小时），超过这个时间后用户的违规次数将重置')
+    .min(1)
+    .max(720) // 最多30天
+    .default(24),
 }).description('关键词守门员插件配置')

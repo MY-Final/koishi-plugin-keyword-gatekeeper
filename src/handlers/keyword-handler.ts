@@ -1,10 +1,13 @@
 import { Session, h } from 'koishi'
 import { MessageHandler } from './base-handler'
-import { Config as PluginConfig } from '../types'
+import { Config as PluginConfig, PunishmentRecord } from '../types'
 import type { OneBot } from 'koishi-plugin-adapter-onebot'
 
 // 关键词处理器
 export class KeywordHandler extends MessageHandler {
+  // 用户处罚记录
+  private punishmentRecords: Map<string, PunishmentRecord> = new Map()
+
   // 检查是否包含关键词
   checkKeywords(message: string, keywords: string[], config: PluginConfig): string | null {
     if (!keywords || keywords.length === 0) return null
@@ -115,6 +118,47 @@ export class KeywordHandler extends MessageHandler {
     }
   }
 
+  // 踢出用户
+  async kickUser(meta: Session): Promise<boolean> {
+    try {
+      this.ctx.logger.info(`[${meta.guildId}] 尝试踢出用户 ${meta.userId}`)
+
+      // 尝试使用 OneBot 的 setGroupKick 方法
+      if ((meta as any).onebot?.setGroupKick) {
+        await (meta as any).onebot.setGroupKick(meta.guildId, meta.userId, false)
+        this.ctx.logger.info(`[${meta.guildId}] 使用 onebot.setGroupKick 踢出成功`)
+        return true
+      }
+      // 优先使用 bot 对象上的 $setGroupKick 方法（OneBot 适配器）
+      else if (meta.bot && typeof meta.bot['$setGroupKick'] === 'function') {
+        await meta.bot['$setGroupKick'](meta.guildId, meta.userId, false)
+        this.ctx.logger.info(`[${meta.guildId}] 使用 bot.$setGroupKick 踢出成功`)
+        return true
+      }
+      // 尝试使用 setGroupKick 方法
+      else if (meta.bot && typeof meta.bot['setGroupKick'] === 'function') {
+        await meta.bot['setGroupKick'](meta.guildId, meta.userId, false)
+        this.ctx.logger.info(`[${meta.guildId}] 使用 bot.setGroupKick 踢出成功`)
+        return true
+      }
+      // 最后尝试通用 API
+      else if (meta.bot && typeof meta.bot.kickGuildMember === 'function') {
+        await meta.bot.kickGuildMember(meta.guildId, meta.userId)
+        this.ctx.logger.info(`[${meta.guildId}] 使用通用 API 踢出成功`)
+        return true
+      } else {
+        this.ctx.logger.warn(`[${meta.guildId}] 无法踢出用户：平台不支持踢出功能或无法获取踢出方法`)
+        return false
+      }
+    } catch (error) {
+      this.ctx.logger.error(`[${meta.guildId}] 踢出用户失败: ${error.message}`)
+      if (error.stack) {
+        this.ctx.logger.debug(`[${meta.guildId}] 踢出错误堆栈: ${error.stack}`)
+      }
+      return false
+    }
+  }
+
   // 发送提示消息
   async sendNotice(meta: Session, message: string, durationText?: string): Promise<void> {
     try {
@@ -152,6 +196,131 @@ export class KeywordHandler extends MessageHandler {
     }
   }
 
+  // 获取用户处罚记录
+  private getUserPunishmentRecord(userId: string): PunishmentRecord {
+    if (!this.punishmentRecords.has(userId)) {
+      this.punishmentRecords.set(userId, {
+        userId,
+        count: 0,
+        lastTriggerTime: 0
+      })
+    }
+    return this.punishmentRecords.get(userId)
+  }
+
+  // 更新用户处罚记录
+  private updateUserPunishmentRecord(userId: string, config: PluginConfig): number {
+    const record = this.getUserPunishmentRecord(userId)
+    const now = Date.now()
+
+    // 检查是否需要重置记录
+    const resetTimeMs = config.punishmentResetHours * 60 * 60 * 1000
+    if (now - record.lastTriggerTime > resetTimeMs) {
+      record.count = 0
+    }
+
+    // 增加违规次数
+    record.count += 1
+    record.lastTriggerTime = now
+
+    return record.count
+  }
+
+  // 处理自动处罚
+  private async handleAutoPunishment(meta: Session, config: PluginConfig, matchedKeyword: string): Promise<boolean> {
+    if (!config.enableAutoPunishment) {
+      // 如果未启用自动处罚，则使用原有的处罚逻辑
+      if (config.recall) {
+        await this.recallMessage(meta)
+      }
+
+      if (config.mute) {
+        const muted = await this.muteUser(meta, config.muteDuration)
+        if (muted && config.customMessage) {
+          const durationText = this.formatDuration(config.muteDuration)
+          await this.sendNotice(meta, config.customMessage, durationText)
+        }
+      } else if (config.customMessage) {
+        await this.sendNotice(meta, config.customMessage)
+      }
+
+      return true
+    }
+
+    // 更新并获取用户的违规次数
+    const violationCount = this.updateUserPunishmentRecord(meta.userId, config)
+
+    // 撤回消息（所有违规等级都撤回）
+    if (config.recall) {
+      await this.recallMessage(meta)
+    }
+
+    let actionTaken = false
+    let message = ''
+
+    // 根据违规次数执行不同的处罚
+    if (violationCount === 1) {
+      // 第一次：警告
+      message = `您触发了关键词"${matchedKeyword}"，这是第一次警告。`
+      actionTaken = true
+    }
+    else if (violationCount === 2) {
+      // 第二次：禁言自定义时长
+      const muteDuration = config.secondViolationMuteDuration
+      const muted = await this.muteUser(meta, muteDuration)
+      if (muted) {
+        const durationText = this.formatDuration(muteDuration)
+        message = `您触发了关键词"${matchedKeyword}"，这是第二次违规，已禁言${durationText}。`
+        actionTaken = true
+      }
+    }
+    else if (violationCount >= config.maxViolationCount) {
+      // 达到最大违规次数：根据配置踢出或长时间禁言
+      if (config.kickOnMaxViolation) {
+        const kicked = await this.kickUser(meta)
+        if (kicked) {
+          message = `用户 ${meta.username || meta.userId} 因多次触发关键词"${matchedKeyword}"已被踢出群聊。`
+          actionTaken = true
+        } else {
+          // 如果踢出失败，尝试禁言
+          const longMuteDuration = 3600 // 1小时
+          const muted = await this.muteUser(meta, longMuteDuration)
+          if (muted) {
+            message = `您触发了关键词"${matchedKeyword}"，这是第${violationCount}次违规，已禁言1小时。`
+            actionTaken = true
+          }
+        }
+      } else {
+        // 配置为不踢出，只禁言
+        const longMuteDuration = 3600 // 1小时
+        const muted = await this.muteUser(meta, longMuteDuration)
+        if (muted) {
+          message = `您触发了关键词"${matchedKeyword}"，这是第${violationCount}次违规，已禁言1小时。`
+          actionTaken = true
+        }
+      }
+    }
+    else {
+      // 介于第二次和最大次数之间的违规：禁言时间递增
+      // 禁言时间随违规次数增加而增加
+      const muteDuration = Math.min(config.secondViolationMuteDuration * (violationCount - 1), 7200) // 最多2小时
+      const muted = await this.muteUser(meta, muteDuration)
+      if (muted) {
+        const durationText = this.formatDuration(muteDuration)
+        message = `您触发了关键词"${matchedKeyword}"，这是第${violationCount}次违规，已禁言${durationText}。`
+        actionTaken = true
+      }
+    }
+
+    // 发送处罚通知
+    if (actionTaken && message) {
+      await this.sendNotice(meta, message)
+      this.ctx.logger.info(`[${meta.guildId}] 用户 ${meta.userId} 因触发关键词 "${matchedKeyword}" 第${violationCount}次违规，已执行自动处罚`)
+    }
+
+    return actionTaken
+  }
+
   // 处理关键词检测
   async handleKeywordDetection(meta: Session, config: PluginConfig): Promise<boolean> {
     // 获取消息内容
@@ -170,30 +339,7 @@ export class KeywordHandler extends MessageHandler {
       return false
     }
 
-    // 处理撤回
-    if (config.recall) {
-      await this.recallMessage(meta)
-    }
-
-    // 处理禁言
-    if (config.mute) {
-      const muted = await this.muteUser(meta, config.muteDuration)
-
-      if (muted) {
-        const durationText = this.formatDuration(config.muteDuration)
-
-        // 发送提示消息
-        if (config.customMessage) {
-          await this.sendNotice(meta, config.customMessage, durationText)
-        }
-
-        this.ctx.logger.info(`[${meta.guildId}] 用户 ${meta.userId} 因触发关键词 "${matchedKeyword}" 被禁言 ${durationText}`)
-      }
-    } else if (config.customMessage) {
-      // 只发送提示，不禁言
-      await this.sendNotice(meta, config.customMessage)
-    }
-
-    return true
+    // 处理自动处罚机制
+    return await this.handleAutoPunishment(meta, config, matchedKeyword)
   }
 }
