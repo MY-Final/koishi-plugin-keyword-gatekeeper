@@ -64,7 +64,7 @@ export class WarningManager {
         lastTriggerKeyword: 'string',
         lastTriggerType: 'string',
         lastActionType: 'string',
-        lastMessageContent: 'string',
+        lastMessageContent: 'text',
         actionHistory: 'text',
         lastTriggerTimeFormatted: 'string'
       }, {
@@ -183,6 +183,8 @@ export class WarningManager {
       guildId: guildId || ''
     }).then(records => records[0])
 
+    let oldCount = 0; // 记录旧的计数值
+
     if (!record) {
       // 创建新记录
       this.ctx.logger.info(`创建新的警告记录: ${key}`)
@@ -190,7 +192,7 @@ export class WarningManager {
       record = {
         userId,
         guildId: guildId || '',
-        count: 0,
+        count: 0, // 确保新记录从0开始计数
         lastTriggerTime: 0,
         lastTriggerKeyword: '',
         lastTriggerType: 'keyword',
@@ -208,18 +210,23 @@ export class WarningManager {
         userId: userId,
         guildId: guildId || ''
       }).then(records => records[0])
+
+      oldCount = 0; // 新记录的旧计数为0
+    } else {
+      oldCount = record.count; // 保存现有记录的计数
     }
 
     // 检查是否需要重置记录
     if (now - record.lastTriggerTime > resetTimeMs) {
-      record.count = 0
+      oldCount = 0; // 重置后的旧计数为0
+      record.count = 0;
       this.logDebug(`记录已重置: ${key}`)
       this.ctx.logger.info(`记录已重置: ${key}`)
     }
 
-    // 增加违规次数
-    record.count += 1
-    record.lastTriggerTime = now
+    // 增加违规次数 (只增加一次)
+    record.count = oldCount + 1;
+    record.lastTriggerTime = now;
 
     // 更新触发信息（如果提供）
     const updateData: any = {
@@ -228,17 +235,18 @@ export class WarningManager {
       lastTriggerTimeFormatted: this.formatDateTime(now)
     }
 
+    // 记录更新前后的计数，用于调试
+    this.ctx.logger.info(`记录 ${key} 更新计数: 之前=${oldCount}, 之后=${record.count}`)
+
     if (triggerInfo) {
       // 更新最近的触发信息
       updateData.lastTriggerKeyword = triggerInfo.keyword || '';
       updateData.lastTriggerType = triggerInfo.type || 'keyword';
       updateData.lastActionType = triggerInfo.action || 'warn';
 
-      // 限制消息内容长度，避免数据库字段溢出
+      // 保存完整的消息内容，不再限制长度
       if (triggerInfo.messageContent) {
-        updateData.lastMessageContent = triggerInfo.messageContent.length > 200
-          ? triggerInfo.messageContent.substring(0, 197) + '...'
-          : triggerInfo.messageContent;
+        updateData.lastMessageContent = triggerInfo.messageContent;
       }
 
       // 更新处罚历史
@@ -256,7 +264,9 @@ export class WarningManager {
           time: now,
           keyword: triggerInfo.keyword,
           type: triggerInfo.type,
-          action: triggerInfo.action
+          action: triggerInfo.action,
+          timeFormatted: this.formatDateTime(now),
+          message: triggerInfo.messageContent || ''
         });
 
         // 限制历史记录数量，保留最近10条
@@ -312,6 +322,7 @@ export class WarningManager {
       keyword: string,
       type: string,
       action: string,
+      message?: string,
       timeFormatted?: string
     }>
   }> {

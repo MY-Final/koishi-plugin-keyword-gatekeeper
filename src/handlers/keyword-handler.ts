@@ -202,6 +202,56 @@ export class KeywordHandler extends MessageHandler {
     }
   }
 
+  /**
+   * 仅更新处罚类型，不增加计数
+   * 避免重复增加警告次数
+   */
+  private async updatePunishmentType(
+    userId: string,
+    guildId: string,
+    triggerInfo: {
+      keyword: string,
+      type: 'keyword' | 'url',
+      action: 'warn' | 'mute' | 'kick',
+      messageContent?: string
+    }
+  ): Promise<void> {
+    try {
+      // 获取当前记录
+      const record = await this.ctx.database.get('keyword_warnings', {
+        userId: userId,
+        guildId: guildId || ''
+      }).then(records => records[0])
+
+      if (!record) {
+        this.ctx.logger.warn(`更新处罚类型失败: 找不到记录 ${guildId}:${userId}`)
+        return
+      }
+
+      // 更新处罚类型相关字段，但不修改计数
+      const updateData: any = {
+        lastTriggerKeyword: triggerInfo.keyword || '',
+        lastTriggerType: triggerInfo.type || 'keyword',
+        lastActionType: triggerInfo.action || 'warn',
+      }
+
+      // 保存完整的消息内容
+      if (triggerInfo.messageContent) {
+        updateData.lastMessageContent = triggerInfo.messageContent;
+      }
+
+      // 更新数据库
+      await this.ctx.database.set('keyword_warnings', {
+        userId: userId,
+        guildId: guildId || ''
+      }, updateData)
+
+      this.ctx.logger.info(`已更新用户 ${userId} 的处罚类型为 ${triggerInfo.action}`)
+    } catch (error) {
+      this.ctx.logger.error(`更新处罚类型失败: ${error.message}`)
+    }
+  }
+
   // 处理自动处罚
   private async handleAutoPunishment(meta: Session, config: PluginConfig, matchedKeyword: string): Promise<boolean> {
     // 检查机器人权限
@@ -275,9 +325,8 @@ export class KeywordHandler extends MessageHandler {
         actionTaken = true
 
         // 更新处罚类型为警告
-        await this.warningManager.updateUserPunishmentRecord(
+        await this.updatePunishmentType(
           meta.userId,
-          config,
           meta.guildId,
           {
             keyword: matchedKeyword,
@@ -297,9 +346,8 @@ export class KeywordHandler extends MessageHandler {
           actionTaken = true
 
           // 更新处罚类型为禁言
-          await this.warningManager.updateUserPunishmentRecord(
+          await this.updatePunishmentType(
             meta.userId,
-            config,
             meta.guildId,
             {
               keyword: matchedKeyword,
@@ -319,9 +367,8 @@ export class KeywordHandler extends MessageHandler {
             actionTaken = true
 
             // 更新处罚类型为踢出
-            await this.warningManager.updateUserPunishmentRecord(
+            await this.updatePunishmentType(
               meta.userId,
-              config,
               meta.guildId,
               {
                 keyword: matchedKeyword,
@@ -339,9 +386,8 @@ export class KeywordHandler extends MessageHandler {
               actionTaken = true
 
               // 更新处罚类型为禁言
-              await this.warningManager.updateUserPunishmentRecord(
+              await this.updatePunishmentType(
                 meta.userId,
-                config,
                 meta.guildId,
                 {
                   keyword: matchedKeyword,
@@ -361,9 +407,8 @@ export class KeywordHandler extends MessageHandler {
             actionTaken = true
 
             // 更新处罚类型为禁言
-            await this.warningManager.updateUserPunishmentRecord(
+            await this.updatePunishmentType(
               meta.userId,
-              config,
               meta.guildId,
               {
                 keyword: matchedKeyword,
@@ -386,9 +431,8 @@ export class KeywordHandler extends MessageHandler {
           actionTaken = true
 
           // 更新处罚类型为禁言
-          await this.warningManager.updateUserPunishmentRecord(
+          await this.updatePunishmentType(
             meta.userId,
-            config,
             meta.guildId,
             {
               keyword: matchedKeyword,

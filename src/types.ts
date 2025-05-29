@@ -35,6 +35,8 @@ export interface Config {
   maxViolationCount: number
   kickOnMaxViolation: boolean
   punishmentResetHours: number
+  // 查询权限控制
+  allowUserSelfQuery: boolean
 }
 
 // 配置模式
@@ -111,4 +113,9 @@ export const ConfigSchema: Schema<Config> = Schema.object({
     .min(1)
     .max(720) // 最多30天
     .default(24),
+
+  // 查询权限控制
+  allowUserSelfQuery: Schema.boolean()
+    .description('是否允许普通用户查询自己的警告记录，关闭后只有管理员可以查询')
+    .default(true),
 }).description('关键词守门员插件配置')

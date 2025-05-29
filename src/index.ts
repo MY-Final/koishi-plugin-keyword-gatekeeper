@@ -6,6 +6,17 @@ import { Config as PluginConfig, ConfigSchema } from './types'
 
 export const name = 'keyword-gatekeeper'
 
+/**
+ * 关键词守门员插件
+ *
+ * 功能：
+ * - 检测群聊中的关键词和URL，自动撤回或禁言
+ * - 记录用户违规次数，根据次数自动升级处罚等级
+ * - 支持查询和管理用户的警告记录
+ * - 支持通过@用户或直接输入用户ID查询/清零记录
+ * - 可配置是否允许普通用户查询自己的警告记录(allowUserSelfQuery选项)
+ */
+
 // 导出配置模式
 export const Config = ConfigSchema
 
@@ -63,6 +74,7 @@ export function apply(ctx: Context, options: PluginConfig) {
   // 查询自己的警告记录
   ctx.command('keyword.warning.my', '查询自己的警告记录')
     .alias('keyword warning my')
+    .userFields(['authority'])
     .action(async ({ session }) => {
       const userId = session.userId
       const guildId = session.guildId
@@ -70,6 +82,11 @@ export function apply(ctx: Context, options: PluginConfig) {
 
       if (!options.enableAutoPunishment) {
         return '自动处罚机制未启用，无法查询警告记录。'
+      }
+
+      // 检查是否允许普通用户查询自己的记录
+      if (!options.allowUserSelfQuery && session.user?.authority < 2) {
+        return '当前设置不允许普通用户查询警告记录，请联系管理员。'
       }
 
       const result = await warningManager.queryUserWarningRecord(userId, options, guildId)
@@ -90,6 +107,33 @@ export function apply(ctx: Context, options: PluginConfig) {
           response += `\n触发时间: ${triggerTime}`
           response += `\n执行处罚: ${result.lastTrigger.action === 'warn' ? '警告' :
                                     result.lastTrigger.action === 'mute' ? '禁言' : '踢出'}`
+
+          if (result.lastTrigger.message) {
+            response += `\n触发消息: ${result.lastTrigger.message}`
+          }
+        }
+
+        // 添加历史记录摘要
+        if (result.history && result.history.length > 1) { // 如果有多于1条的历史记录
+          response += `\n\n历史触发记录 (最近${Math.min(result.history.length - 1, 2)}条):`
+
+          // 显示除了最新一条外的最近2条记录
+          const recentHistory = result.history.slice(-3, -1);
+
+          recentHistory.forEach((record, index) => {
+            // 使用格式化的时间，如果有的话
+            const recordTime = record.timeFormatted || new Date(record.time).toLocaleString();
+            const recordType = record.type === 'url' ? '网址' : '关键词';
+            const action = record.action === 'warn' ? '警告' :
+                          record.action === 'mute' ? '禁言' : '踢出';
+
+            response += `\n${index + 1}. ${recordTime} - ${recordType} "${record.keyword}" (${action})`
+          });
+        }
+
+        // 如果历史记录超过2条，添加查看完整历史的提示
+        if (result.history.length > 3) {
+          response += `\n\n使用 keyword.warning.my-history 查看您的完整历史记录`;
         }
 
         return response;
@@ -161,6 +205,11 @@ export function apply(ctx: Context, options: PluginConfig) {
 
             response += `\n${index + 1}. ${recordTime} - ${recordType} "${record.keyword}" (${action})`
           });
+
+          // 如果历史记录超过3条，添加查看完整历史的提示
+          if (result.history.length > 3) {
+            response += `\n\n使用 keyword.warning.history ${targetUserId} 查看完整历史记录`;
+          }
         }
 
         return response;
@@ -326,6 +375,104 @@ export function apply(ctx: Context, options: PluginConfig) {
       } catch (error) {
         ctx.logger.error(`[${session.guildId}] 清空记录失败: ${error.message}`)
         return '清空记录时发生错误，请查看日志。'
+      }
+    })
+
+  // 添加查看完整历史记录的命令（需要管理员权限）
+  ctx.command('keyword.warning.history <userId:string>', '查看指定用户的完整警告历史')
+    .alias('keyword warning history <userId:string>')
+    .userFields(['authority'])
+    .action(async ({ session }, userId) => {
+      // 尝试从消息中提取@的用户ID
+      const atMatch = session.content.match(/<at id="([^"]+)"\/>/);
+      const targetUserId = atMatch ? atMatch[1] : userId;
+
+      ctx.logger.info(`[${session.guildId}] 用户 ${session.userId} 查询用户 ${targetUserId} 的完整警告历史`)
+
+      // 检查权限
+      if (session.user?.authority < 2) {
+        return '权限不足，需要管理员权限才能查询历史记录。'
+      }
+
+      if (!options.enableAutoPunishment) {
+        return '自动处罚机制未启用，无法查询警告记录。'
+      }
+
+      if (!targetUserId) {
+        return '请提供要查询的用户ID或@要查询的用户。'
+      }
+
+      const guildId = session.guildId
+      const result = await warningManager.queryUserWarningRecord(targetUserId, options, guildId)
+
+      if (result.count === 0) {
+        return `用户 ${targetUserId} 当前没有警告记录。`
+      } else if (!result.history || result.history.length === 0) {
+        return `用户 ${targetUserId} 没有历史警告记录。`
+      } else {
+        let response = `用户 ${targetUserId} 的完整警告历史记录 (共${result.history.length}条):\n`
+
+        // 显示所有历史记录
+        result.history.forEach((record, index) => {
+          const recordTime = record.timeFormatted || new Date(record.time).toLocaleString();
+          const recordType = record.type === 'url' ? '网址' : '关键词';
+          const action = record.action === 'warn' ? '警告' :
+                        record.action === 'mute' ? '禁言' : '踢出';
+
+          response += `\n${index + 1}. ${recordTime} - ${recordType} "${record.keyword}" (${action})`
+          // 如果有消息内容，则显示
+          if (record.message) {
+            response += `\n   消息内容: ${record.message}`
+          }
+        });
+
+        return response;
+      }
+    })
+
+  // 添加查看自己完整历史记录的命令
+  ctx.command('keyword.warning.my-history', '查看自己的完整警告历史')
+    .alias('keyword warning my-history')
+    .userFields(['authority'])
+    .action(async ({ session }) => {
+      const userId = session.userId
+      const guildId = session.guildId
+      ctx.logger.info(`[${guildId}] 用户 ${userId} 查询自己的完整警告历史`)
+
+      if (!options.enableAutoPunishment) {
+        return '自动处罚机制未启用，无法查询警告记录。'
+      }
+
+      // 检查是否允许普通用户查询自己的记录
+      if (!options.allowUserSelfQuery && session.user?.authority < 2) {
+        return '当前设置不允许普通用户查询警告记录，请联系管理员。'
+      }
+
+      const result = await warningManager.queryUserWarningRecord(userId, options, guildId)
+
+      if (result.count === 0) {
+        return '您当前没有警告记录。'
+      } else if (!result.history || result.history.length === 0) {
+        return '您没有历史警告记录。'
+      } else {
+        let response = `您的完整警告历史记录 (共${result.history.length}条):\n`
+
+        // 显示所有历史记录
+        result.history.forEach((record, index) => {
+          const recordTime = record.timeFormatted || new Date(record.time).toLocaleString();
+          const recordType = record.type === 'url' ? '网址' : '关键词';
+          const action = record.action === 'warn' ? '警告' :
+                        record.action === 'mute' ? '禁言' : '踢出';
+
+          response += `\n${index + 1}. ${recordTime} - ${recordType} "${record.keyword}" (${action})`
+        });
+
+        // 如果历史记录超过2条，添加查看完整历史的提示
+        if (result.history.length > 3) {
+          response += `\n\n使用 keyword.warning.my-history 查看您的完整历史记录`;
+        }
+
+        return response;
       }
     })
 
