@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-keyword-gatekeeper",
   "description": "检测并撤回包含关键词的消息，支持自动处罚机制和处罚等级升级",
-  "version": "0.0.5",
+  "version": "0.0.3",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
