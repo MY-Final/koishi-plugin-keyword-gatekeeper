@@ -44,15 +44,15 @@ export const usage = `## 🔰 插件说明
 4. 使用相关命令管理用户的违规记录
 
 ### 👨‍💻 命令列表
-- \`keyword.warning.my\` - 查询自己的警告记录
-- \`keyword.warning.my-history\` - 查看自己的完整警告历史
-- \`keyword.warning.query @用户\` - 查询指定用户的警告记录（管理员）
-- \`keyword.warning.history @用户\` - 查看指定用户的完整警告历史（管理员）
-- \`keyword.warning.reset @用户\` - 清零指定用户的警告记录（管理员）
-- \`keyword.warning.list\` - 列出所有有警告记录的用户（管理员）
-- \`keyword.warning.debug\` - 查看所有警告记录的详细信息（管理员）
-- \`keyword.warning.sync\` - 强制同步所有警告记录（管理员）
-- \`keyword.warning.clear-all\` - 清空所有警告记录（超级管理员）`
+- \`kw.warning.my\` - 查询自己的警告记录
+- \`kw.warning.my-history\` - 查看自己的完整警告历史
+- \`kw.warning.query @用户\` - 查询指定用户的警告记录（管理员）
+- \`kw.warning.history @用户\` - 查看指定用户的完整警告历史（管理员）
+- \`kw.warning.reset @用户\` - 清零指定用户的警告记录（管理员）
+- \`kw.warning.list\` - 列出所有有警告记录的用户（管理员）
+- \`kw.warning.debug\` - 查看所有警告记录的详细信息（管理员）
+- \`kw.warning.sync\` - 强制同步所有警告记录（管理员）
+- \`kw.warning.clear-all\` - 清空所有警告记录（超级管理员）`
 
 // 主函数
 export function apply(ctx: Context, options: PluginConfig) {
@@ -71,10 +71,10 @@ export function apply(ctx: Context, options: PluginConfig) {
       const content = meta.content || ''
 
       // 检查是否为命令 - 仅基于内容检查，避免类型错误
-      const isCommand = content.startsWith('keyword') ||
-                         content.startsWith('keyword.') ||
-                         content.startsWith('/keyword') ||
-                         content.startsWith('.keyword')
+      const isCommand = content.startsWith('kw') ||
+                         content.startsWith('kw.') ||
+                         content.startsWith('/kw') ||
+                         content.startsWith('.kw')
 
       // 如果是命令，跳过关键词和网址检测
       if (isCommand) {
@@ -98,13 +98,13 @@ export function apply(ctx: Context, options: PluginConfig) {
   }, true)
 
   // 注册查询警告记录命令
-  ctx.command('keyword.warning', '关键词警告记录相关命令')
+  ctx.command('kw.warning', '关键词警告记录相关命令')
     .usage('查询或管理关键词警告记录')
-    .alias('keyword warning')
+    .alias('kw warning')
 
   // 查询自己的警告记录
-  ctx.command('keyword.warning.my', '查询自己的警告记录')
-    .alias('keyword warning my')
+  ctx.command('kw.warning.my', '查询自己的警告记录')
+    .alias('kw warning my')
     .userFields(['authority'])
     .action(async ({ session }) => {
       const userId = session.userId
@@ -164,7 +164,7 @@ export function apply(ctx: Context, options: PluginConfig) {
 
         // 如果历史记录超过2条，添加查看完整历史的提示
         if (result.history.length > 3) {
-          response += `\n\n使用 keyword.warning.my-history 查看您的完整历史记录`;
+          response += `\n\n使用 kw.warning.my-history 查看您的完整历史记录`;
         }
 
         return response;
@@ -172,8 +172,8 @@ export function apply(ctx: Context, options: PluginConfig) {
     })
 
   // 查询指定用户的警告记录（需要管理员权限）
-  ctx.command('keyword.warning.query [userId:string]', '查询指定用户的警告记录')
-    .alias('keyword warning query [userId:string]')
+  ctx.command('kw.warning.query [userId:string]', '查询指定用户的警告记录')
+    .alias('kw warning query [userId:string]')
     .userFields(['authority'])
     .action(async ({ session }, userId) => {
       // 尝试从消息中提取@的用户ID
@@ -239,7 +239,7 @@ export function apply(ctx: Context, options: PluginConfig) {
 
           // 如果历史记录超过3条，添加查看完整历史的提示
           if (result.history.length > 3) {
-            response += `\n\n使用 keyword.warning.history ${targetUserId} 查看完整历史记录`;
+            response += `\n\n使用 kw.warning.history ${targetUserId} 查看完整历史记录`;
           }
         }
 
@@ -248,8 +248,8 @@ export function apply(ctx: Context, options: PluginConfig) {
     })
 
   // 清零指定用户的警告记录（需要管理员权限）
-  ctx.command('keyword.warning.reset [userId:string]', '清零指定用户的警告记录')
-    .alias('keyword warning reset [userId:string]')
+  ctx.command('kw.warning.reset [userId:string]', '清零指定用户的警告记录')
+    .alias('kw warning reset [userId:string]')
     .userFields(['authority'])
     .action(async ({ session }, userId) => {
       // 尝试从消息中提取@的用户ID
@@ -290,8 +290,8 @@ export function apply(ctx: Context, options: PluginConfig) {
     })
 
   // 查看所有有警告记录的用户（需要管理员权限）
-  ctx.command('keyword.warning.list', '列出所有有警告记录的用户')
-    .alias('keyword warning list')
+  ctx.command('kw.warning.list', '列出所有有警告记录的用户')
+    .alias('kw warning list')
     .userFields(['authority'])
     .action(async ({ session }) => {
       ctx.logger.debug(`[${session.guildId}] 用户 ${session.userId} 查询所有警告记录`)
@@ -321,7 +321,7 @@ export function apply(ctx: Context, options: PluginConfig) {
 1. 群内未触发过关键词/URL检测
 2. 记录已被重置或超过时间自动清零
 3. 插件配置中未启用自动处罚机制\n
-如需查看更详细的记录状态，请使用命令 keyword.warning.debug`
+如需查看更详细的记录状态，请使用命令 kw.warning.debug`
         }
 
         let message = '当前群组有警告记录的用户：\n'
@@ -346,8 +346,8 @@ export function apply(ctx: Context, options: PluginConfig) {
     })
 
   // 添加调试命令，查看所有警告记录（需要管理员权限）
-  ctx.command('keyword.warning.debug', '查看所有警告记录（调试用）')
-    .alias('keyword warning debug')
+  ctx.command('kw.warning.debug', '查看所有警告记录（调试用）')
+    .alias('kw warning debug')
     .userFields(['authority'])
     .action(async ({ session }) => {
       // 检查权限
@@ -369,8 +369,8 @@ export function apply(ctx: Context, options: PluginConfig) {
     })
 
   // 添加强制同步命令，用于修复记录不一致的问题
-  ctx.command('keyword.warning.sync', '强制同步所有警告记录')
-    .alias('keyword warning sync')
+  ctx.command('kw.warning.sync', '强制同步所有警告记录')
+    .alias('kw warning sync')
     .userFields(['authority'])
     .action(async ({ session }) => {
       // 检查权限
@@ -387,8 +387,8 @@ export function apply(ctx: Context, options: PluginConfig) {
     })
 
   // 添加清空所有警告记录的命令
-  ctx.command('keyword.warning.clear-all', '清空所有警告记录')
-    .alias('keyword warning clear-all')
+  ctx.command('kw.warning.clear-all', '清空所有警告记录')
+    .alias('kw warning clear-all')
     .userFields(['authority'])
     .action(async ({ session }) => {
       // 检查权限
@@ -419,8 +419,8 @@ export function apply(ctx: Context, options: PluginConfig) {
     })
 
   // 添加查看完整历史记录的命令（需要管理员权限）
-  ctx.command('keyword.warning.history <userId:string>', '查看指定用户的完整警告历史')
-    .alias('keyword warning history <userId:string>')
+  ctx.command('kw.warning.history <userId:string>', '查看指定用户的完整警告历史')
+    .alias('kw warning history <userId:string>')
     .userFields(['authority'])
     .action(async ({ session }, userId) => {
       // 尝试从消息中提取@的用户ID
@@ -471,8 +471,8 @@ export function apply(ctx: Context, options: PluginConfig) {
     })
 
   // 添加查看自己完整历史记录的命令
-  ctx.command('keyword.warning.my-history', '查看自己的完整警告历史')
-    .alias('keyword warning my-history')
+  ctx.command('kw.warning.my-history', '查看自己的完整警告历史')
+    .alias('kw warning my-history')
     .userFields(['authority'])
     .action(async ({ session }) => {
       const userId = session.userId
@@ -513,7 +513,7 @@ export function apply(ctx: Context, options: PluginConfig) {
 
         // 如果历史记录超过2条，添加查看完整历史的提示
         if (result.history.length > 3) {
-          response += `\n\n使用 keyword.warning.my-history 查看您的完整历史记录`;
+          response += `\n\n使用 kw.warning.my-history 查看您的完整历史记录`;
         }
 
         return response;

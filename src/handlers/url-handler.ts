@@ -21,10 +21,10 @@ export class UrlHandler extends MessageHandler {
     if (!message) return null
 
     // 排除常见命令格式
-    if (message.startsWith('keyword') ||
-        message.startsWith('keyword.') ||
-        message.startsWith('/keyword') ||
-        message.startsWith('.keyword')) {
+    if (message.startsWith('kw') ||
+        message.startsWith('kw.') ||
+        message.startsWith('/kw') ||
+        message.startsWith('.kw')) {
       this.ctx.logger.info(`跳过命令检测: ${message}`)
       return null
     }

@@ -111,9 +111,9 @@ keyword-gatekeeper:
 
 ### 用户命令
 
-- `keyword.warning.my` - 查询自己的警告记录
+- `kw.warning.my` - 查询自己的警告记录
   ```
-  > keyword.warning.my
+  > kw.warning.my
   您当前的警告次数为: 1次，将在23小时45分钟后自动重置。
   最近一次触发: 关键词 "敏感词"
   触发时间: 2023年05月29日 13时50分01秒
@@ -125,9 +125,9 @@ keyword-gatekeeper:
   2. 2023年05月28日 18时45分10秒 - 网址 "bad-example.com" (警告)
   ```
 
-- `keyword.warning.my-history` - 查看自己的完整警告历史
+- `kw.warning.my-history` - 查看自己的完整警告历史
   ```
-  > keyword.warning.my-history
+  > kw.warning.my-history
   您的完整警告历史记录 (共5条):
   1. 2023年05月28日 10时15分22秒 - 关键词 "敏感词" (警告)
      消息内容: 这是一条包含敏感词的消息
@@ -145,13 +145,13 @@ keyword-gatekeeper:
 
 以下命令需要管理员权限：
 
-- `keyword.warning.query @用户` - 查询指定用户的警告记录
-- `keyword.warning.history @用户` - 查看指定用户的完整警告历史
-- `keyword.warning.reset @用户` - 清零指定用户的警告记录
-- `keyword.warning.list` - 列出所有有警告记录的用户
-- `keyword.warning.debug` - 查看所有警告记录的详细信息（调试用）
-- `keyword.warning.sync` - 强制同步所有警告记录
-- `keyword.warning.clear-all` - 清空所有警告记录（需要超级管理员权限）
+- `kw.warning.query @用户` - 查询指定用户的警告记录
+- `kw.warning.history @用户` - 查看指定用户的完整警告历史
+- `kw.warning.reset @用户` - 清零指定用户的警告记录
+- `kw.warning.list` - 列出所有有警告记录的用户
+- `kw.warning.debug` - 查看所有警告记录的详细信息（调试用）
+- `kw.warning.sync` - 强制同步所有警告记录
+- `kw.warning.clear-all` - 清空所有警告记录（需要超级管理员权限）
 
 ## 💾 数据持久化
 
