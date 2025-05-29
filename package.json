@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-keyword-gatekeeper",
   "description": "检测并撤回包含关键词的消息，支持自动处罚机制和处罚等级升级",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -33,10 +33,65 @@
     "violation"
   ],
   "devDependencies": {
-    "koishi-plugin-adapter-onebot": "^6.8.0",
-    "typescript": "^5.0.0"
+    "koishi-plugin-adapter-onebot": "^5.6.1",
+    "@types/node": "^17.0.45",
+    "koishi": "^4.13.0",
+    "typescript": "^4.9.5"
   },
   "peerDependencies": {
-    "koishi": "^4.18.7"
-  }
+    "koishi": "^4.13.0"
+  },
+  "koishi": {
+    "description": {
+      "zh": "高级关键词守卫，支持关键词和URL检测，自动处罚和升级机制，数据库持久化"
+    },
+    "service": {
+      "required": ["database"]
+    },
+    "locales": ["zh"]
+  },
+  "changelog": [
+    {
+      "version": "0.0.5",
+      "changes": [
+        "增强警告记录数据存储：添加关键词、消息内容和处罚类型",
+        "记录触发历史，支持查看历史违规记录",
+        "改进命令输出格式，显示更详细的警告记录信息",
+        "修复URL检测中的异步问题"
+      ]
+    },
+    {
+      "version": "0.0.4",
+      "changes": [
+        "添加数据库持久化支持，解决重启后记录丢失问题",
+        "优化警告记录管理器，提高可靠性",
+        "增加更多管理命令：debug、sync和clear-all",
+        "改进数据一致性和错误处理"
+      ]
+    },
+    {
+      "version": "0.0.3",
+      "changes": [
+        "修复警告记录查询命令被误识别为违规URL的问题",
+        "改进警告记录的持久化和群组隔离",
+        "优化自动处罚机制和处罚等级升级逻辑"
+      ]
+    },
+    {
+      "version": "0.0.2",
+      "changes": [
+        "添加URL检测功能，支持白名单",
+        "增加多种处罚方式：警告、禁言、踢出",
+        "添加自动处罚机制"
+      ]
+    },
+    {
+      "version": "0.0.1",
+      "changes": [
+        "初始版本发布",
+        "基本关键词检测功能",
+        "简单的撤回和禁言操作"
+      ]
+    }
+  ]
 }
