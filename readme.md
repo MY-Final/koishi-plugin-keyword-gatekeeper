@@ -1,6 +1,6 @@
-# koishi-plugin-message-guard
+# koishi-plugin-keyword-gatekeeper
 
-[![npm](https://img.shields.io/npm/v/koishi-plugin-message-guard?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-message-guard)
+[![npm](https://img.shields.io/npm/v/koishi-plugin-keyword-gatekeeper?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-keyword-gatekeeper)
 
 > 检测并撤回包含关键词的消息，进行禁言或踢出群聊，支持正则表达式匹配。
 
@@ -20,19 +20,19 @@
 
 ```bash
 # 使用 npm
-npm install koishi-plugin-message-guard
+npm install koishi-plugin-keyword-gatekeeper
 
 # 使用 yarn
-yarn add koishi-plugin-message-guard
+yarn add koishi-plugin-keyword-gatekeeper
 
 # 使用 Koishi 插件市场
-# 在插件市场中搜索"message-guard"并安装
+# 在插件市场中搜索"keyword-gatekeeper"并安装
 ```
 
 ## 配置说明
 
 ```yaml
-message-guard:
+keyword-gatekeeper:
   # 关键词检测配置
   keywords:          # 需要检测的关键词列表
     - '敏感词1'
@@ -52,6 +52,9 @@ message-guard:
   maxViolationCount: 3           # 最大违规次数，达到此次数后将执行最终处罚
   kickOnMaxViolation: true       # 达到最大违规次数时是否踢出用户
   punishmentResetHours: 24       # 处罚记录重置时间（小时）
+
+  # 查询权限控制
+  allowUserSelfQuery: true       # 是否允许普通用户查询自己的警告记录
 ```
 
 ## 自动处罚机制
@@ -88,15 +91,35 @@ message-guard:
   最近一次触发: 关键词 "敏感词"
   触发时间: 2023/5/29 13:50:01
   执行处罚: 警告
+
+  历史触发记录 (最近2条):
+  1. 2023/5/28 10:15:22 - 关键词 "敏感词" (警告)
+  2. 2023/5/28 18:45:10 - 网址 "bad-example.com" (警告)
+  ```
+
+- `keyword.warning.my-history` - 查看自己的完整警告历史
+  ```
+  > keyword.warning.my-history
+  您的完整警告历史记录 (共5条):
+  1. 2023/5/28 10:15:22 - 关键词 "敏感词" (警告)
+     消息内容: 这是一条包含敏感词的消息
+  2. 2023/5/28 18:45:10 - 网址 "bad-example.com" (警告)
+     消息内容: 大家快来看 bad-example.com 这个网站
+  3. 2023/5/29 09:30:45 - 关键词 "违禁词" (警告)
+     消息内容: 这是一条包含违禁词的消息
+  4. 2023/5/29 12:20:33 - 关键词 "敏感词" (禁言)
+     消息内容: 又是一条包含敏感词的消息
+  5. 2023/5/29 13:50:01 - 关键词 "敏感词" (禁言)
+     消息内容: 这还是一条包含敏感词的消息
   ```
 
 ### 管理员命令
 
 以下命令需要管理员权限：
 
-- `keyword.warning.query <userId>` - 查询指定用户的警告记录
+- `keyword.warning.query [userId]` - 查询指定用户的警告记录（支持@用户）
   ```
-  > keyword.warning.query 12345678
+  > keyword.warning.query @用户名
   用户 12345678 当前的警告次数为: 2次，将在5小时30分钟后自动重置。
   最近一次触发: 网址 "bad-example.com"
   触发时间: 2023/5/29 15:20:33
@@ -107,11 +130,29 @@ message-guard:
   1. 2023/5/28 10:15:22 - 关键词 "敏感词" (警告)
   2. 2023/5/29 08:45:10 - 关键词 "违禁词" (警告)
   3. 2023/5/29 15:20:33 - 网址 "bad-example.com" (禁言)
+
+  使用 keyword.warning.history 12345678 查看完整历史记录
   ```
 
-- `keyword.warning.reset <userId>` - 清零指定用户的警告记录
+- `keyword.warning.history [userId]` - 查看指定用户的完整警告历史（支持@用户）
   ```
-  > keyword.warning.reset 12345678
+  > keyword.warning.history @用户名
+  用户 12345678 的完整警告历史记录 (共5条):
+  1. 2023/5/28 10:15:22 - 关键词 "敏感词" (警告)
+     消息内容: 这是一条包含敏感词的消息
+  2. 2023/5/28 18:45:10 - 网址 "bad-example.com" (警告)
+     消息内容: 大家快来看 bad-example.com 这个网站
+  3. 2023/5/29 08:45:10 - 关键词 "违禁词" (警告)
+     消息内容: 这是一条包含违禁词的消息
+  4. 2023/5/29 12:20:33 - 关键词 "敏感词" (禁言)
+     消息内容: 又是一条包含敏感词的消息
+  5. 2023/5/29 15:20:33 - 网址 "bad-example.com" (禁言)
+     消息内容: 大家快来看 bad-example.com 这个网站
+  ```
+
+- `keyword.warning.reset [userId]` - 清零指定用户的警告记录（支持@用户）
+  ```
+  > keyword.warning.reset @用户名
   已成功清零用户 12345678 的警告记录。
   ```
 
@@ -160,10 +201,11 @@ message-guard:
 - 触发的关键词或URL
 - 触发类型（关键词/URL）
 - 执行的处罚类型（警告/禁言/踢出）
-- 触发的消息内容
-- 处罚历史记录
+- 触发的消息内容（完整保存）
+- 处罚历史记录（最多保留10条）
+- 格式化的时间（方便阅读）
 
-这确保了即使机器人重启，也能保持完整的警告记录，并能提供详细的违规历史信息。
+这确保了即使机器人重启，也能保持完整的警告记录，并能提供详细的违规历史信息。管理员可以查看用户的完整违规历史，包括每次触发的具体消息内容，便于核实和判断。
 
 ## 配置项
 
@@ -180,7 +222,7 @@ message-guard:
 
 设置关键词列表并启用自动处罚机制：
 ```yaml
-message-guard:
+keyword-gatekeeper:
   keywords:
     - '敏感词1'
     - '[0-9]{11}'  # 匹配11位数字
@@ -204,8 +246,12 @@ message-guard:
 
 ### v0.0.4
 - 🔄 **持久化存储**：警告记录现在存储在数据库中，机器人重启后不会丢失
-- 🛠️ **修复问题**：修复了执行处罚后无法查询到警告记录的问题
-- 🔍 **增强命令**：新增 debug、sync 和 clear-all 命令，方便管理和查看警告记录
+- 📊 **历史记录**：记录用户的违规历史，可查看完整的历史违规记录
+- 📝 **消息存储**：保存触发违规的完整消息内容，方便管理员核实
+- 👤 **艾特支持**：查询和清零命令支持通过@用户来指定目标
+- 🔒 **权限控制**：可配置是否允许普通用户查询自己的警告记录
+- 🛠️ **修复问题**：修复了计数错误和清空记录显示问题
+- 🔍 **增强命令**：新增 history、my-history、debug、sync 和 clear-all 命令
 - 🏷️ **群组隔离**：改进了基于群组ID的记录隔离，确保不同群的记录互不影响
 
 ### v0.0.3

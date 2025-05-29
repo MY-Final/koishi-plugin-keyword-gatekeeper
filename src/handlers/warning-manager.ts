@@ -661,4 +661,21 @@ export class WarningManager {
 
     return info
   }
+
+  /**
+   * 获取警告记录的总数
+   */
+  async getRecordCount(): Promise<number> {
+    // 确保数据库已初始化
+    if (!this.dbInitialized) await this.initDatabase()
+
+    try {
+      // 获取所有记录并计算长度
+      const records = await this.ctx.database.get('keyword_warnings', {})
+      return records.length
+    } catch (error) {
+      this.ctx.logger.error(`获取记录数量失败: ${error.message}`)
+      return 0
+    }
+  }
 }

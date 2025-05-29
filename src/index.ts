@@ -368,10 +368,19 @@ export function apply(ctx: Context, options: PluginConfig) {
       ctx.logger.info(`[${session.guildId}] 用户 ${session.userId} 请求清空所有警告记录`)
 
       try {
-        // 使用数据库直接清空记录
-        const result = await ctx.database.remove('keyword_warnings', {})
-        ctx.logger.info(`已清理 ${result} 条警告记录`)
-        return `已清理 ${result} 条警告记录`
+        // 先查询当前有多少条记录
+        const recordCount = await warningManager.getRecordCount()
+
+        // 然后执行清空操作
+        await ctx.database.remove('keyword_warnings', {})
+
+        // 清空内存缓存
+        if (warningManager && warningManager['punishmentRecords']) {
+          warningManager['punishmentRecords'].clear()
+        }
+
+        ctx.logger.info(`已清理 ${recordCount} 条警告记录`)
+        return `已清理 ${recordCount} 条警告记录`
       } catch (error) {
         ctx.logger.error(`[${session.guildId}] 清空记录失败: ${error.message}`)
         return '清空记录时发生错误，请查看日志。'
@@ -465,6 +474,10 @@ export function apply(ctx: Context, options: PluginConfig) {
                         record.action === 'mute' ? '禁言' : '踢出';
 
           response += `\n${index + 1}. ${recordTime} - ${recordType} "${record.keyword}" (${action})`
+          // 如果有消息内容，则显示
+          if (record.message) {
+            response += `\n   消息内容: ${record.message}`
+          }
         });
 
         // 如果历史记录超过2条，添加查看完整历史的提示
