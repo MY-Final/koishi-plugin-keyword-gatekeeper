@@ -97,11 +97,15 @@ export function apply(ctx: Context, options: PluginConfig) {
     })
 
   // 查询指定用户的警告记录（需要管理员权限）
-  ctx.command('keyword.warning.query <userId:string>', '查询指定用户的警告记录')
-    .alias('keyword warning query <userId:string>')
+  ctx.command('keyword.warning.query [userId:string]', '查询指定用户的警告记录')
+    .alias('keyword warning query [userId:string]')
     .userFields(['authority'])
     .action(async ({ session }, userId) => {
-      ctx.logger.info(`[${session.guildId}] 用户 ${session.userId} 查询用户 ${userId} 的警告记录`)
+      // 尝试从消息中提取@的用户ID
+      const atMatch = session.content.match(/<at id="([^"]+)"\/>/);
+      const targetUserId = atMatch ? atMatch[1] : userId;
+
+      ctx.logger.info(`[${session.guildId}] 用户 ${session.userId} 查询用户 ${targetUserId} 的警告记录`)
 
       // 检查权限
       if (session.user?.authority < 2) {
@@ -112,18 +116,18 @@ export function apply(ctx: Context, options: PluginConfig) {
         return '自动处罚机制未启用，无法查询警告记录。'
       }
 
-      if (!userId) {
-        return '请提供要查询的用户ID。'
+      if (!targetUserId) {
+        return '请提供要查询的用户ID或@要查询的用户。'
       }
 
       const guildId = session.guildId
-      const result = await warningManager.queryUserWarningRecord(userId, options, guildId)
+      const result = await warningManager.queryUserWarningRecord(targetUserId, options, guildId)
       ctx.logger.info(`[${guildId}] 查询结果: ${JSON.stringify(result)}`)
 
       if (result.count === 0) {
-        return `用户 ${userId} 当前没有警告记录。`
+        return `用户 ${targetUserId} 当前没有警告记录。`
       } else {
-        let response = `用户 ${userId} 当前的警告次数为: ${result.count}次，将在${result.resetTime}自动重置。`
+        let response = `用户 ${targetUserId} 当前的警告次数为: ${result.count}次，将在${result.resetTime}自动重置。`
 
         // 添加最近触发信息
         if (result.lastTrigger) {
@@ -164,11 +168,15 @@ export function apply(ctx: Context, options: PluginConfig) {
     })
 
   // 清零指定用户的警告记录（需要管理员权限）
-  ctx.command('keyword.warning.reset <userId:string>', '清零指定用户的警告记录')
-    .alias('keyword warning reset <userId:string>')
+  ctx.command('keyword.warning.reset [userId:string]', '清零指定用户的警告记录')
+    .alias('keyword warning reset [userId:string]')
     .userFields(['authority'])
     .action(async ({ session }, userId) => {
-      ctx.logger.info(`[${session.guildId}] 用户 ${session.userId} 尝试清零用户 ${userId} 的警告记录`)
+      // 尝试从消息中提取@的用户ID
+      const atMatch = session.content.match(/<at id="([^"]+)"\/>/);
+      const targetUserId = atMatch ? atMatch[1] : userId;
+
+      ctx.logger.info(`[${session.guildId}] 用户 ${session.userId} 尝试清零用户 ${targetUserId} 的警告记录`)
 
       // 检查权限
       if (session.user?.authority < 2) {
@@ -179,21 +187,21 @@ export function apply(ctx: Context, options: PluginConfig) {
         return '自动处罚机制未启用，无法清零警告记录。'
       }
 
-      if (!userId) {
-        return '请提供要清零警告记录的用户ID。'
+      if (!targetUserId) {
+        return '请提供要清零警告记录的用户ID或@要清零记录的用户。'
       }
 
       const guildId = session.guildId
-      ctx.logger.info(`[${guildId}] 清零用户 ${userId} 的警告记录`)
+      ctx.logger.info(`[${guildId}] 清零用户 ${targetUserId} 的警告记录`)
 
       try {
-        const success = await warningManager.resetUserWarningRecord(userId, guildId)
+        const success = await warningManager.resetUserWarningRecord(targetUserId, guildId)
         ctx.logger.info(`[${guildId}] 清零结果: ${success ? '成功' : '失败'}`)
 
         if (success) {
-          return `已成功清零用户 ${userId} 的警告记录。`
+          return `已成功清零用户 ${targetUserId} 的警告记录。`
         } else {
-          return `用户 ${userId} 没有警告记录，无需清零。`
+          return `用户 ${targetUserId} 没有警告记录，无需清零。`
         }
       } catch (error) {
         ctx.logger.error(`[${guildId}] 清零记录失败: ${error.message}`)
