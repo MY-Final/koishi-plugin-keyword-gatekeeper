@@ -47,7 +47,7 @@ export function apply(ctx: Context, options: PluginConfig) {
 
       // 如果是命令，跳过关键词和网址检测
       if (isCommand) {
-        ctx.logger.info(`[${meta.guildId}] 跳过命令检测: ${content}`)
+        ctx.logger.debug(`[${meta.guildId}] 跳过命令检测: ${content}`)
         return next()
       }
 
@@ -78,7 +78,7 @@ export function apply(ctx: Context, options: PluginConfig) {
     .action(async ({ session }) => {
       const userId = session.userId
       const guildId = session.guildId
-      ctx.logger.info(`[${guildId}] 用户 ${userId} 查询自己的警告记录`)
+      ctx.logger.debug(`[${guildId}] 用户 ${userId} 查询自己的警告记录`)
 
       if (!options.enableAutoPunishment) {
         return '自动处罚机制未启用，无法查询警告记录。'
@@ -90,7 +90,7 @@ export function apply(ctx: Context, options: PluginConfig) {
       }
 
       const result = await warningManager.queryUserWarningRecord(userId, options, guildId)
-      ctx.logger.info(`[${guildId}] 查询结果: ${JSON.stringify(result)}`)
+      ctx.logger.debug(`[${guildId}] 查询结果: ${JSON.stringify(result)}`)
 
       if (result.count === 0) {
         return '您当前没有警告记录。'
@@ -149,7 +149,7 @@ export function apply(ctx: Context, options: PluginConfig) {
       const atMatch = session.content.match(/<at id="([^"]+)"\/>/);
       const targetUserId = atMatch ? atMatch[1] : userId;
 
-      ctx.logger.info(`[${session.guildId}] 用户 ${session.userId} 查询用户 ${targetUserId} 的警告记录`)
+      ctx.logger.debug(`[${session.guildId}] 用户 ${session.userId} 查询用户 ${targetUserId} 的警告记录`)
 
       // 检查权限
       if (session.user?.authority < 2) {
@@ -166,7 +166,7 @@ export function apply(ctx: Context, options: PluginConfig) {
 
       const guildId = session.guildId
       const result = await warningManager.queryUserWarningRecord(targetUserId, options, guildId)
-      ctx.logger.info(`[${guildId}] 查询结果: ${JSON.stringify(result)}`)
+      ctx.logger.debug(`[${guildId}] 查询结果: ${JSON.stringify(result)}`)
 
       if (result.count === 0) {
         return `用户 ${targetUserId} 当前没有警告记录。`
@@ -225,7 +225,7 @@ export function apply(ctx: Context, options: PluginConfig) {
       const atMatch = session.content.match(/<at id="([^"]+)"\/>/);
       const targetUserId = atMatch ? atMatch[1] : userId;
 
-      ctx.logger.info(`[${session.guildId}] 用户 ${session.userId} 尝试清零用户 ${targetUserId} 的警告记录`)
+      ctx.logger.debug(`[${session.guildId}] 用户 ${session.userId} 尝试清零用户 ${targetUserId} 的警告记录`)
 
       // 检查权限
       if (session.user?.authority < 2) {
@@ -241,11 +241,11 @@ export function apply(ctx: Context, options: PluginConfig) {
       }
 
       const guildId = session.guildId
-      ctx.logger.info(`[${guildId}] 清零用户 ${targetUserId} 的警告记录`)
+      ctx.logger.debug(`[${guildId}] 清零用户 ${targetUserId} 的警告记录`)
 
       try {
         const success = await warningManager.resetUserWarningRecord(targetUserId, guildId)
-        ctx.logger.info(`[${guildId}] 清零结果: ${success ? '成功' : '失败'}`)
+        ctx.logger.debug(`[${guildId}] 清零结果: ${success ? '成功' : '失败'}`)
 
         if (success) {
           return `已成功清零用户 ${targetUserId} 的警告记录。`
@@ -263,7 +263,7 @@ export function apply(ctx: Context, options: PluginConfig) {
     .alias('keyword warning list')
     .userFields(['authority'])
     .action(async ({ session }) => {
-      ctx.logger.info(`[${session.guildId}] 用户 ${session.userId} 查询所有警告记录`)
+      ctx.logger.debug(`[${session.guildId}] 用户 ${session.userId} 查询所有警告记录`)
 
       // 检查权限
       if (session.user?.authority < 2) {
@@ -275,14 +275,14 @@ export function apply(ctx: Context, options: PluginConfig) {
       }
 
       const guildId = session.guildId
-      ctx.logger.info(`[${guildId}] 查询所有警告记录`)
+      ctx.logger.debug(`[${guildId}] 查询所有警告记录`)
 
       // 打印所有记录，帮助调试
-      ctx.logger.info(`[${guildId}] 当前所有警告记录:`)
+      ctx.logger.debug(`[${guildId}] 当前所有警告记录:`)
       try {
         // 传入配置参数，确保使用正确的过期时间
         const userIds = await warningManager.getAllWarnedUserIds(guildId, options)
-        ctx.logger.info(`[${guildId}] 找到 ${userIds.length} 条记录`)
+        ctx.logger.debug(`[${guildId}] 找到 ${userIds.length} 条记录`)
 
         if (userIds.length === 0) {
           // 提供更详细的帮助信息
@@ -327,8 +327,8 @@ export function apply(ctx: Context, options: PluginConfig) {
       try {
         // 获取所有记录的调试信息
         const debugInfo = await warningManager.getDebugInfo()
-        ctx.logger.info(`[${session.guildId}] 用户 ${session.userId} 查看调试信息`)
-        ctx.logger.info(debugInfo)
+        ctx.logger.debug(`[${session.guildId}] 用户 ${session.userId} 查看调试信息`)
+        ctx.logger.debug(debugInfo)
 
         return debugInfo
       } catch (error) {
@@ -347,7 +347,7 @@ export function apply(ctx: Context, options: PluginConfig) {
         return '权限不足，需要管理员权限才能使用同步命令。'
       }
 
-      ctx.logger.info(`[${session.guildId}] 用户 ${session.userId} 请求同步警告记录`)
+      ctx.logger.debug(`[${session.guildId}] 用户 ${session.userId} 请求同步警告记录`)
 
       // 获取所有记录
       const syncResult = await warningManager.syncAllRecords(options)
@@ -365,7 +365,7 @@ export function apply(ctx: Context, options: PluginConfig) {
         return '权限不足，需要超级管理员权限才能清空所有警告记录。'
       }
 
-      ctx.logger.info(`[${session.guildId}] 用户 ${session.userId} 请求清空所有警告记录`)
+      ctx.logger.debug(`[${session.guildId}] 用户 ${session.userId} 请求清空所有警告记录`)
 
       try {
         // 先查询当前有多少条记录
@@ -379,7 +379,7 @@ export function apply(ctx: Context, options: PluginConfig) {
           warningManager['punishmentRecords'].clear()
         }
 
-        ctx.logger.info(`已清理 ${recordCount} 条警告记录`)
+        ctx.logger.debug(`已清理 ${recordCount} 条警告记录`)
         return `已清理 ${recordCount} 条警告记录`
       } catch (error) {
         ctx.logger.error(`[${session.guildId}] 清空记录失败: ${error.message}`)
@@ -396,7 +396,7 @@ export function apply(ctx: Context, options: PluginConfig) {
       const atMatch = session.content.match(/<at id="([^"]+)"\/>/);
       const targetUserId = atMatch ? atMatch[1] : userId;
 
-      ctx.logger.info(`[${session.guildId}] 用户 ${session.userId} 查询用户 ${targetUserId} 的完整警告历史`)
+      ctx.logger.debug(`[${session.guildId}] 用户 ${session.userId} 查询用户 ${targetUserId} 的完整警告历史`)
 
       // 检查权限
       if (session.user?.authority < 2) {
@@ -446,7 +446,7 @@ export function apply(ctx: Context, options: PluginConfig) {
     .action(async ({ session }) => {
       const userId = session.userId
       const guildId = session.guildId
-      ctx.logger.info(`[${guildId}] 用户 ${userId} 查询自己的完整警告历史`)
+      ctx.logger.debug(`[${guildId}] 用户 ${userId} 查询自己的完整警告历史`)
 
       if (!options.enableAutoPunishment) {
         return '自动处罚机制未启用，无法查询警告记录。'

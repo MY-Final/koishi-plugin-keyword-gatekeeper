@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-keyword-gatekeeper",
   "description": "检测并撤回包含关键词的消息，支持自动处罚机制和处罚等级升级",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -14,7 +14,7 @@
   },
   "author": {
     "name": "Final",
-    "email": "your-email@example.com",
+    "email": "3486159271@qq.com",
     "url": "https://github.com/MY-Final"
   },
   "repository": {
@@ -57,7 +57,8 @@
         "增强警告记录数据存储：添加关键词、消息内容和处罚类型",
         "记录触发历史，支持查看历史违规记录",
         "改进命令输出格式，显示更详细的警告记录信息",
-        "修复URL检测中的异步问题"
+        "修复URL检测中的异步问题",
+        "优化日志输出，减少重复日志和不必要的信息日志"
       ]
     },
     {

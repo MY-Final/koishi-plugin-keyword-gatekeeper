@@ -32,18 +32,26 @@ export class WarningManager {
   // 保留内存映射以提高性能，每次操作后与数据库同步
   private punishmentRecords: Map<string, PunishmentRecord> = new Map()
   // 添加一个日志记录开关
-  private enableDebugLog: boolean = true
+  private enableDebugLog: boolean = false // 默认关闭调试日志
   // 是否已初始化数据库
   private dbInitialized: boolean = false
+  // 静态实例计数，确保只有一个实例输出初始化日志
+  private static instanceCount: number = 0
+  private instanceId: number
 
   constructor(ctx: Context) {
     this.ctx = ctx
+    this.instanceId = ++WarningManager.instanceCount
 
     // 数据库初始化
     this.ctx.on('ready', async () => {
       await this.initDatabase()
-      this.logDebug('警告记录管理器已初始化')
-      this.ctx.logger.info('警告记录管理器已初始化')
+      // 只有第一个实例输出info级别日志
+      if (this.instanceId === 1) {
+        this.ctx.logger.info('警告记录管理器已初始化')
+      } else {
+        this.logDebug('警告记录管理器已初始化 (实例 ' + this.instanceId + ')')
+      }
     })
   }
 
@@ -78,7 +86,12 @@ export class WarningManager {
       await this.loadWarningsFromDatabase()
 
       this.dbInitialized = true
-      this.ctx.logger.info('警告记录数据库初始化成功')
+      // 只有第一个实例输出info级别日志
+      if (this.instanceId === 1) {
+        this.ctx.logger.info('警告记录数据库初始化成功')
+      } else {
+        this.logDebug('警告记录数据库初始化成功 (实例 ' + this.instanceId + ')')
+      }
     } catch (error) {
       this.ctx.logger.error(`警告记录数据库初始化失败: ${error.message}`)
     }
@@ -90,7 +103,12 @@ export class WarningManager {
   private async loadWarningsFromDatabase(): Promise<void> {
     try {
       const records = await this.ctx.database.get('keyword_warnings', {})
-      this.ctx.logger.info(`从数据库加载了 ${records.length} 条警告记录`)
+      // 只有第一个实例输出info级别日志
+      if (this.instanceId === 1) {
+        this.ctx.logger.info(`从数据库加载了 ${records.length} 条警告记录`)
+      } else {
+        this.logDebug(`从数据库加载了 ${records.length} 条警告记录 (实例 ${this.instanceId})`)
+      }
 
       // 清空当前内存中的记录
       this.punishmentRecords.clear()
@@ -105,7 +123,12 @@ export class WarningManager {
         })
       })
 
-      this.ctx.logger.info('警告记录加载完成')
+      // 只有第一个实例输出info级别日志
+      if (this.instanceId === 1) {
+        this.ctx.logger.debug('警告记录加载完成')
+      } else {
+        this.logDebug('警告记录加载完成 (实例 ' + this.instanceId + ')')
+      }
     } catch (error) {
       this.ctx.logger.error(`加载警告记录失败: ${error.message}`)
     }
@@ -172,7 +195,7 @@ export class WarningManager {
     if (!this.dbInitialized) await this.initDatabase()
 
     const key = this.getRecordKey(userId, guildId)
-    this.ctx.logger.info(`更新警告记录: ${key}`)
+    this.logDebug(`更新警告记录: ${key}`)
 
     const now = Date.now()
     const resetTimeMs = config.punishmentResetHours * 60 * 60 * 1000
@@ -187,7 +210,7 @@ export class WarningManager {
 
     if (!record) {
       // 创建新记录
-      this.ctx.logger.info(`创建新的警告记录: ${key}`)
+      this.logDebug(`创建新的警告记录: ${key}`)
 
       record = {
         userId,
@@ -221,7 +244,6 @@ export class WarningManager {
       oldCount = 0; // 重置后的旧计数为0
       record.count = 0;
       this.logDebug(`记录已重置: ${key}`)
-      this.ctx.logger.info(`记录已重置: ${key}`)
     }
 
     // 增加违规次数 (只增加一次)
