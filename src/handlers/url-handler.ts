@@ -20,12 +20,29 @@ export class UrlHandler extends MessageHandler {
   checkUrls(message: string, whitelist: string[]): string | null {
     if (!message) return null
 
-    // 排除常见命令格式
-    if (message.startsWith('kw') ||
-        message.startsWith('kw.') ||
-        message.startsWith('/kw') ||
-        message.startsWith('.kw')) {
-      this.ctx.logger.info(`跳过命令检测: ${message}`)
+    // 排除所有插件命令格式
+    // 1. 检查是否是插件命令
+    if (message.match(/^(\/|\.)?kw(\.|\ )/i)) {
+      this.ctx.logger.info(`跳过插件命令检测: ${message}`)
+      return null
+    }
+
+    // 2. 特别排除所有预设命令，避免任何误判
+    const pluginCommands = [
+      'kw.group.preset', 'kw group preset',
+      'kw.group.remove-preset', 'kw group remove-preset',
+      'kw.group.enable', 'kw group enable',
+      'kw.group.disable', 'kw group disable',
+      'kw.group.reset', 'kw group reset',
+      'kw.warning.my', 'kw warning my',
+      'kw.warning.query', 'kw warning query',
+      'kw.warning.reset', 'kw warning reset',
+      'kw.warning.list', 'kw warning list',
+      'kw.url.whitelist', 'kw url whitelist'
+    ]
+
+    if (pluginCommands.some(cmd => message.startsWith(cmd))) {
+      this.ctx.logger.info(`跳过特定插件命令: ${message}`)
       return null
     }
 

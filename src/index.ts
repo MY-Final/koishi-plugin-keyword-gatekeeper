@@ -64,7 +64,8 @@ export const usage = `## 🔰 插件说明
 - \`kw.group.enable\` - 启用群组特定配置（管理员）
 - \`kw.group.disable\` - 禁用群组特定配置（管理员）
 - \`kw.group.reset\` - 重置群组特定配置（管理员）
-- \`kw.group.preset <presetName:string>\` - 导入预设关键词包（管理员）`
+- \`kw.group.preset <presetName:string>\` - 导入预设关键词包（管理员）
+- \`kw.group.remove-preset <presetName:string>\` - 删除预设关键词包（管理员）`
 
 // 主函数
 export function apply(ctx: Context, options: PluginConfig) {
@@ -145,7 +146,8 @@ export function apply(ctx: Context, options: PluginConfig) {
 - kw.group.enable - 启用群组特定配置
 - kw.group.disable - 禁用群组特定配置
 - kw.group.reset - 重置群组特定配置
-- kw.group.preset <presetName:string> - 导入预设关键词包`
+- kw.group.preset <presetName:string> - 导入预设关键词包
+- kw.group.remove-preset <presetName:string> - 删除预设关键词包`
     })
 
   // 查看群组关键词列表
@@ -435,6 +437,81 @@ export function apply(ctx: Context, options: PluginConfig) {
           response += `\n... 等共 ${result.duplicates.length} 个关键词`
         } else {
           response += result.duplicates.map(k => `- ${k}`).join('\n')
+        }
+      }
+
+      return response
+    })
+
+  // 删除预设关键词包
+  ctx.command('kw.group.remove-preset <presetName:string>', '删除预设关键词包')
+    .alias('kw group remove-preset <presetName:string>')
+    .userFields(['authority'])
+    .channelFields(['id', 'guildId'])
+    .action(async ({ session }, presetName) => {
+      // 检查是否在群聊中
+      if (!session?.channel?.guildId) {
+        return '此命令只能在群聊中使用。'
+      }
+
+      // 检查权限
+      if (session.user?.authority < 2) {
+        return '权限不足，需要管理员权限才能删除预设关键词包。'
+      }
+
+      // 检查是否启用了群组特定配置
+      if (!options.enableGroupSpecificConfig) {
+        return '未启用群组特定配置功能，请先在插件设置中开启"启用群组特定配置"选项。'
+      }
+
+      const guildId = session.channel.guildId
+      const userId = session.userId
+
+      // 如果没有指定预设包名称，显示可用的预设包列表
+      if (!presetName) {
+        const presets = groupConfigManager.getAvailablePresets()
+        const descriptions = groupConfigManager.getPresetDescriptions()
+
+        let response = '可用的预设关键词包：\n'
+        presets.forEach(preset => {
+          response += `- ${preset}: ${descriptions[preset]}\n`
+        })
+
+        response += '\n使用方法：kw.group.remove-preset <预设包名称> 删除指定的预设包中的关键词'
+        return response
+      }
+
+      // 删除预设包中的关键词
+      const result = await groupConfigManager.removePresetKeywords(guildId, presetName, userId)
+
+      // 如果预设包不存在
+      if (result.total === 0) {
+        const presets = groupConfigManager.getAvailablePresets()
+        return `预设包 "${presetName}" 不存在。可用的预设包：${presets.join(', ')}`
+      }
+
+      // 删除结果
+      let response = `预设关键词包 "${presetName}" 删除结果：\n总计：${result.total} 个关键词\n`
+
+      if (result.success.length > 0) {
+        response += `✅ 成功删除：${result.success.length} 个\n`
+        // 如果成功删除的关键词超过5个，只显示前5个
+        if (result.success.length > 5) {
+          response += result.success.slice(0, 5).map(k => `- ${k}`).join('\n')
+          response += `\n... 等共 ${result.success.length} 个关键词`
+        } else {
+          response += result.success.map(k => `- ${k}`).join('\n')
+        }
+      }
+
+      if (result.notFound.length > 0) {
+        response += `\n\n⚠️ 未找到（跳过）：${result.notFound.length} 个\n`
+        // 如果未找到的关键词超过5个，只显示前5个
+        if (result.notFound.length > 5) {
+          response += result.notFound.slice(0, 5).map(k => `- ${k}`).join('\n')
+          response += `\n... 等共 ${result.notFound.length} 个关键词`
+        } else {
+          response += result.notFound.map(k => `- ${k}`).join('\n')
         }
       }
 

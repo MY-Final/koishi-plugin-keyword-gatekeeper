@@ -432,30 +432,28 @@ export class GroupConfigManager {
     // 预设关键词包定义
     const presets: Record<string, string[]> = {
       'politics': [
-        '政治敏感词1', '政治敏感词2', '政治敏感词3',
-        '政治敏感词4', '政治敏感词5'
+        '习近平', '毛泽东', '六四', '天安门', '共产党',
+        '反党', '反革命', '民主运动', '政治迫害', '政治自由'
       ],
       'adult': [
-        '成人内容1', '成人内容2', '成人内容3',
-        '成人内容4', '成人内容5'
+        '色情', '黄色', '做爱', '约炮', '一夜情',
+        '嫖娼', '援交', '自慰', '激情视频', '裸聊'
       ],
       'gambling': [
-        '赌博1', '赌博2', '赌博3',
-        '赌博4', '赌博5'
+        '赌博', '博彩', '押注', '赌场', '彩票',
+        '赌钱', '六合彩', '时时彩', '百家乐', '德州扑克'
       ],
       'spam': [
-        '垃圾信息1', '垃圾信息2', '垃圾信息3',
-        '垃圾信息4', '垃圾信息5'
+        '私聊', '广告', '营销', '推广', '低价',
+        '微商', '代理', '免费领', '兼职', '刷单'
       ],
       'scam': [
-        '诈骗1', '诈骗2', '诈骗3',
-        '诈骗4', '诈骗5'
+        '诈骗', '骗钱', '钓鱼', '虚假', '欺骗',
+        '假冒', '传销', '非法集资', '资金盘', '庞氏骗局'
       ],
       'common': [
-        '常见违禁词1', '常见违禁词2', '常见违禁词3',
-        '常见违禁词4', '常见违禁词5', '常见违禁词6',
-        '常见违禁词7', '常见违禁词8', '常见违禁词9',
-        '常见违禁词10'
+        '傻逼', '操你妈', '草泥马', '日你妈', '垃圾',
+        '废物', '狗东西', '滚蛋', '白痴', '贱人'
       ]
     }
 
@@ -476,6 +474,130 @@ export class GroupConfigManager {
   }
 
   /**
+   * 批量移除关键词
+   * @param guildId 群组ID
+   * @param keywords 要移除的关键词数组
+   * @param userId 操作用户ID
+   * @returns 移除结果
+   */
+  async removeKeywordsBatch(
+    guildId: string,
+    keywords: string[],
+    userId: string
+  ): Promise<{
+    success: string[],
+    notFound: string[],
+    total: number
+  }> {
+    if (!keywords || keywords.length === 0) {
+      return { success: [], notFound: [], total: 0 }
+    }
+
+    // 获取当前配置
+    let groupConfig = await this.getGroupConfig(guildId)
+
+    // 结果统计
+    const result = {
+      success: [] as string[],
+      notFound: [] as string[],
+      total: keywords.length
+    }
+
+    // 如果配置不存在，直接返回全部未找到
+    if (!groupConfig) {
+      return { success: [], notFound: keywords, total: keywords.length }
+    }
+
+    // 标记是否有更改
+    let hasChanges = false
+
+    // 移除关键词
+    for (const keyword of keywords) {
+      // 跳过空关键词
+      if (!keyword || keyword.trim() === '') continue
+
+      const trimmedKeyword = keyword.trim()
+      const index = groupConfig.keywords.indexOf(trimmedKeyword)
+
+      // 如果找到了关键词，从数组中移除
+      if (index !== -1) {
+        groupConfig.keywords.splice(index, 1)
+        result.success.push(trimmedKeyword)
+        hasChanges = true
+      } else {
+        result.notFound.push(trimmedKeyword)
+      }
+    }
+
+    // 只有成功移除了关键词才更新配置
+    if (hasChanges) {
+      await this.updateGroupConfig(guildId, groupConfig, userId)
+    }
+
+    return result
+  }
+
+  /**
+   * 删除指定预设包中的关键词
+   * @param guildId 群组ID
+   * @param presetName 预设包名称
+   * @param userId 操作用户ID
+   * @returns 删除结果
+   */
+  async removePresetKeywords(
+    guildId: string,
+    presetName: string,
+    userId: string
+  ): Promise<{
+    success: string[],
+    notFound: string[],
+    total: number
+  }> {
+    // 预设关键词包定义 (使用相同的预设定义)
+    const presets: Record<string, string[]> = {
+      'politics': [
+        '习近平', '毛泽东', '六四', '天安门', '共产党',
+        '反党', '反革命', '民主运动', '政治迫害', '政治自由'
+      ],
+      'adult': [
+        '色情', '黄色', '做爱', '约炮', '一夜情',
+        '嫖娼', '援交', '自慰', '激情视频', '裸聊'
+      ],
+      'gambling': [
+        '赌博', '博彩', '押注', '赌场', '彩票',
+        '赌钱', '六合彩', '时时彩', '百家乐', '德州扑克'
+      ],
+      'spam': [
+        '私聊', '广告', '营销', '推广', '低价',
+        '微商', '代理', '免费领', '兼职', '刷单'
+      ],
+      'scam': [
+        '诈骗', '骗钱', '钓鱼', '虚假', '欺骗',
+        '假冒', '传销', '非法集资', '资金盘', '庞氏骗局'
+      ],
+      'common': [
+        '傻逼', '操你妈', '草泥马', '日你妈', '垃圾',
+        '废物', '狗东西', '滚蛋', '白痴', '贱人'
+      ]
+    }
+
+    // 检查预设包是否存在
+    if (!presets[presetName]) {
+      return {
+        success: [],
+        notFound: [],
+        total: 0
+      }
+    }
+
+    // 获取预设包中的关键词
+    const keywords = presets[presetName]
+
+    // 使用批量移除方法删除关键词
+    return this.removeKeywordsBatch(guildId, keywords, userId)
+  }
+
+  /**
    * 获取所有可用的预设关键词包名称
    * @returns 预设包名称数组
    */
@@ -489,11 +611,11 @@ export class GroupConfigManager {
    */
   getPresetDescriptions(): Record<string, string> {
     return {
-      'politics': '政治相关敏感词汇（5个词）',
-      'adult': '成人内容相关敏感词汇（5个词）',
-      'gambling': '赌博相关敏感词汇（5个词）',
-      'spam': '垃圾信息相关敏感词汇（5个词）',
-      'scam': '诈骗相关敏感词汇（5个词）',
+      'politics': '政治相关敏感词汇（10个词）',
+      'adult': '成人内容相关敏感词汇（10个词）',
+      'gambling': '赌博相关敏感词汇（10个词）',
+      'spam': '垃圾信息相关敏感词汇（10个词）',
+      'scam': '诈骗相关敏感词汇（10个词）',
       'common': '常见违禁词汇集合（10个词）'
     }
   }

@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-keyword-gatekeeper",
   "description": "检测并撤回包含关键词的消息，支持自动处罚机制和处罚等级升级",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -52,12 +52,22 @@
   },
   "changelog": [
     {
+      "version": "0.0.9",
+      "changes": [
+        "优化URL检测逻辑，避免将插件自身命令误判为URL",
+        "添加更全面的命令排除规则，特别处理所有kw前缀命令",
+        "明确列出所有插件命令，防止误触发警告",
+        "改进日志记录，显示命令跳过原因"
+      ]
+    },
+    {
       "version": "0.0.8",
       "changes": [
-        "修复配置类型定义问题，确保群组配置功能正常工作",
-        "增加缺失的GroupConfig接口定义",
-        "添加enableGroupSpecificConfig到全局配置选项",
-        "优化代码结构，修复编译错误"
+        "添加删除预设关键词包功能（kw.group.remove-preset命令）",
+        "更新预设关键词包内容，使用实际常见违禁词代替占位符",
+        "修复URL检测误判命令的问题",
+        "完善命令帮助信息和文档",
+        "修复配置类型定义问题，确保群组配置功能正常工作"
       ]
     },
     {
