@@ -14,6 +14,16 @@ export interface PunishmentRecord {
   lastTriggerTime: number
 }
 
+// 群组配置接口
+export interface GroupConfig {
+  guildId: string
+  enabled: boolean
+  keywords: string[]
+  customMessage: string
+  urlWhitelist: string[]
+  urlCustomMessage: string
+}
+
 // 配置接口
 export interface Config {
   keywords: string[]
@@ -37,6 +47,8 @@ export interface Config {
   punishmentResetHours: number
   // 查询权限控制
   allowUserSelfQuery: boolean
+  // 群组特定配置
+  enableGroupSpecificConfig: boolean
 }
 
 // 配置模式
@@ -123,4 +135,10 @@ export const ConfigSchema: Schema<Config> = Schema.intersect([
       .description('是否允许普通用户查询自己的警告记录，关闭后只有管理员可以查询')
       .default(true),
   }).description('权限控制设置'),
+
+  Schema.object({
+    enableGroupSpecificConfig: Schema.boolean()
+      .description('是否启用群组特定配置，开启后每个群可以设置独立的关键词和提示消息')
+      .default(false),
+  }).description('群组配置设置'),
 ])
