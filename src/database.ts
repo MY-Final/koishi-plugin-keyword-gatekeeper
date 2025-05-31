@@ -63,72 +63,10 @@ export class KeywordDatabase {
       })
 
       this.dbInitialized = true
-      // 创建系统预设包
-      await this.initializeSystemPresets()
+      // 日志初始化成功
+      this.ctx.logger.info('关键词守门员数据库初始化成功')
     } catch (error) {
       this.ctx.logger.error(`预设包数据库初始化失败: ${error.message}`)
-    }
-  }
-
-  // 初始化系统预设包
-  private async initializeSystemPresets() {
-    const systemPresets: PresetPackage[] = [
-      {
-        name: 'politics',
-        description: '政治相关敏感词汇',
-        keywords: ['政治敏感词1', '政治敏感词2', '政治敏感词3'],
-        isSystem: true,
-        createdBy: 'system',
-        createdAt: Date.now()
-      },
-      {
-        name: 'adult',
-        description: '成人内容相关敏感词汇',
-        keywords: ['成人敏感词1', '成人敏感词2', '成人敏感词3'],
-        isSystem: true,
-        createdBy: 'system',
-        createdAt: Date.now()
-      },
-      {
-        name: 'gambling',
-        description: '赌博相关敏感词汇',
-        keywords: ['赌博敏感词1', '赌博敏感词2', '赌博敏感词3'],
-        isSystem: true,
-        createdBy: 'system',
-        createdAt: Date.now()
-      },
-      {
-        name: 'spam',
-        description: '垃圾信息相关敏感词汇',
-        keywords: ['垃圾信息词1', '垃圾信息词2', '垃圾信息词3'],
-        isSystem: true,
-        createdBy: 'system',
-        createdAt: Date.now()
-      },
-      {
-        name: 'scam',
-        description: '诈骗相关敏感词汇',
-        keywords: ['诈骗敏感词1', '诈骗敏感词2', '诈骗敏感词3'],
-        isSystem: true,
-        createdBy: 'system',
-        createdAt: Date.now()
-      },
-      {
-        name: 'common',
-        description: '常见违禁词汇集合',
-        keywords: ['常见违禁词1', '常见违禁词2', '常见违禁词3'],
-        isSystem: true,
-        createdBy: 'system',
-        createdAt: Date.now()
-      }
-    ]
-
-    // 检查并创建系统预设包
-    for (const preset of systemPresets) {
-      const existing = await this.ctx.database.get('keyword_preset_package', { name: preset.name })
-      if (!existing || existing.length === 0) {
-        await this.ctx.database.create('keyword_preset_package', preset)
-      }
     }
   }
 
