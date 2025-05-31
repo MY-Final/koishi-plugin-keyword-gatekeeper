@@ -24,6 +24,17 @@ export interface GroupConfig {
   urlCustomMessage: string
 }
 
+// 预设包接口
+export interface PresetPackage {
+  id?: number
+  name: string          // 预设包名称
+  description: string   // 预设包描述
+  keywords: string[]    // 关键词列表
+  isSystem: boolean     // 是否为系统预设包
+  createdBy: string     // 创建者ID
+  createdAt: number     // 创建时间
+}
+
 // 配置接口
 export interface Config {
   keywords: string[]
@@ -49,10 +60,15 @@ export interface Config {
   allowUserSelfQuery: boolean
   // 群组特定配置
   enableGroupSpecificConfig: boolean
+  enabledGroups: string[]
   // 默认启用的预设包
   defaultPresets: string[]
   // 是否在群组启用特定配置时自动导入默认预设包
   autoImportPresets: boolean
+  // 是否显示预设包内容
+  showPresetContent: boolean
+  // 是否允许自定义预设包
+  allowCustomPresets: boolean
 }
 
 // 配置模式
@@ -142,8 +158,11 @@ export const ConfigSchema: Schema<Config> = Schema.intersect([
 
   Schema.object({
     enableGroupSpecificConfig: Schema.boolean()
-      .description('是否启用群组特定配置，开启后每个群可以设置独立的关键词和提示消息')
+      .description('【功能总开关】是否启用"群组特定配置"功能，必须开启此项才能使用群组相关设置')
       .default(false),
+    enabledGroups: Schema.array(String)
+      .description('【自动启用】指定哪些群组自动启用特定配置，这些群组无需手动执行kw.group.enable命令')
+      .default([]),
     defaultPresets: Schema.array(Schema.union([
       Schema.const('politics').description('政治相关敏感词汇'),
       Schema.const('adult').description('成人内容相关敏感词汇'),
@@ -158,4 +177,13 @@ export const ConfigSchema: Schema<Config> = Schema.intersect([
       .description('是否在群组启用特定配置时自动导入默认预设包')
       .default(true),
   }).description('群组配置设置'),
+
+  Schema.object({
+    showPresetContent: Schema.boolean()
+      .description('是否在命令中显示预设包的完整内容，开启后可以查看预设包中的所有关键词')
+      .default(true),
+    allowCustomPresets: Schema.boolean()
+      .description('是否允许创建和管理自定义预设包，开启后可以创建、编辑和删除自定义预设包')
+      .default(true),
+  }).description('预设包设置'),
 ])

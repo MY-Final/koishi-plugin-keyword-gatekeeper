@@ -231,7 +231,41 @@ export class GroupConfigManager {
     // 如果未启用群组特定配置，直接返回全局配置
     if (!globalConfig.enableGroupSpecificConfig) return globalConfig
 
-    const groupConfig = await this.getGroupConfig(guildId)
+    // 检查是否是预设启用的群组
+    const isPreEnabled = globalConfig.enabledGroups &&
+                         globalConfig.enabledGroups.includes(guildId);
+
+    // 获取群组特定配置
+    let groupConfig = await this.getGroupConfig(guildId);
+
+    // 如果是预设启用的群组但没有配置，则自动创建并启用配置
+    if (isPreEnabled && !groupConfig) {
+      this.ctx.logger.info(`群组 ${guildId} 在预设启用列表中，自动创建并启用特定配置`);
+      // 创建默认配置
+      await this.updateGroupConfig(
+        guildId,
+        {
+          guildId: guildId,
+          enabled: true,
+          keywords: [],
+          customMessage: '',
+          urlWhitelist: [],
+          urlCustomMessage: ''
+        },
+        'system'
+      );
+
+      // 如果配置了自动导入预设包
+      if (globalConfig.autoImportPresets && globalConfig.defaultPresets && globalConfig.defaultPresets.length > 0) {
+        for (const presetName of globalConfig.defaultPresets) {
+          this.ctx.logger.info(`为预设启用的群组 ${guildId} 自动导入预设包: ${presetName}`);
+          await this.importPresetKeywords(guildId, presetName, 'system');
+        }
+      }
+
+      // 重新获取配置
+      groupConfig = await this.getGroupConfig(guildId);
+    }
 
     // 如果群组配置不存在或未启用，返回全局配置
     if (!groupConfig || !groupConfig.enabled) return globalConfig

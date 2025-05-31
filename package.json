@@ -1,134 +1,76 @@
 {
   "name": "koishi-plugin-keyword-gatekeeper",
-  "description": "检测并撤回包含关键词的消息，支持自动处罚机制和处罚等级升级",
+  "description": "关键词守门员，用于检测和处理群聊中的敏感关键词和非白名单URL",
   "version": "0.0.8",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
     "lib",
-    "dist"
+    "src"
   ],
   "license": "MIT",
-  "scripts": {
-    "build": "tsc"
-  },
-  "author": {
-    "name": "Final",
-    "email": "3486159271@qq.com",
-    "url": "https://github.com/MY-Final"
-  },
+  "author": "Niko <niko@niko233.com>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MY-Final/koishi-plugin-message-guard.git"
+    "url": "git+https://github.com/initialencounter/koishi-plugin-keyword-gatekeeper.git"
   },
+  "bugs": {
+    "url": "https://github.com/initialencounter/koishi-plugin-keyword-gatekeeper/issues"
+  },
+  "homepage": "https://github.com/initialencounter/koishi-plugin-keyword-gatekeeper#readme",
   "keywords": [
     "chatbot",
     "koishi",
     "plugin",
-    "message",
-    "guard",
-    "keywords",
+    "keyword",
+    "moderation",
     "filter",
-    "auto-punishment",
-    "violation"
+    "url",
+    "whitelist"
   ],
-  "devDependencies": {
-    "koishi-plugin-adapter-onebot": "^5.6.1",
-    "@types/node": "^17.0.45",
-    "koishi": "^4.13.0",
-    "typescript": "^4.9.5"
-  },
   "peerDependencies": {
     "koishi": "^4.13.0"
   },
   "koishi": {
     "description": {
-      "zh": "高级关键词守卫，支持关键词和URL检测，自动处罚和升级机制，数据库持久化"
+      "en": "Keyword Gatekeeper: Detect and handle sensitive keywords and non-whitelisted URLs in group chats",
+      "zh": "关键词守门员：检测和处理群聊中的敏感关键词和非白名单URL"
     },
     "service": {
-      "required": ["database"]
-    },
-    "locales": ["zh"]
-  },
-  "changelog": [
-    {
-      "version": "0.0.8",
-      "changes": [
-        "修复URL检测误判QQ表情包和图片的问题",
-        "优化URL检测逻辑，自动识别QQ多媒体域名和资源链接",
-        "减少日志输出，将安全链接处理信息降级为debug级别",
-        "增加对多种QQ资源链接格式的支持"
-      ]
-    },
-    {
-      "version": "0.0.7",
-      "changes": [
-        "添加预设关键词包功能，支持一键导入多种类型的违禁词",
-        "提供多个分类预设包，包含政治、成人内容、赌博、垃圾信息、诈骗等常见违禁词",
-        "添加批量添加关键词功能，支持一次性导入多个关键词",
-        "优化关键词处理逻辑，增强数据校验",
-        "改进命令提示和帮助信息",
-        "添加默认预设包配置选项，可以在插件配置界面选择默认启用的预设包",
-        "支持在群组启用特定配置时自动导入默认预设包",
-        "添加删除预设关键词包功能（kw.group.remove-preset命令）",
-        "更新预设关键词包内容，使用实际常见违禁词代替占位符",
-        "修复URL检测误判命令的问题"
-      ]
-    },
-    {
-      "version": "0.0.6",
-      "changes": [
-        "添加群组特定配置功能，支持每个QQ群设置独立的关键词和提示信息",
-        "新增群组管理命令，方便群管理员自定义关键词列表",
-        "允许为不同群组设置不同的URL白名单",
-        "优化配置管理逻辑，提高检测效率",
-        "完善错误处理和日志记录"
-      ]
-    },
-    {
-      "version": "0.0.5",
-      "changes": [
-        "增强警告记录数据存储：添加关键词、消息内容和处罚类型",
-        "记录触发历史，支持查看历史违规记录",
-        "改进命令输出格式，显示更详细的警告记录信息",
-        "修复URL检测中的异步问题",
-        "优化日志输出，减少重复日志和不必要的信息日志",
-        "改进插件界面，将设置分组展示，更加直观",
-        "美化插件首页，增加emoji和详细使用说明"
-      ]
-    },
-    {
-      "version": "0.0.4",
-      "changes": [
-        "添加数据库持久化支持，解决重启后记录丢失问题",
-        "优化警告记录管理器，提高可靠性",
-        "增加更多管理命令：debug、sync和clear-all",
-        "改进数据一致性和错误处理"
-      ]
-    },
-    {
-      "version": "0.0.3",
-      "changes": [
-        "修复警告记录查询命令被误识别为违规URL的问题",
-        "改进警告记录的持久化和群组隔离",
-        "优化自动处罚机制和处罚等级升级逻辑"
-      ]
-    },
-    {
-      "version": "0.0.2",
-      "changes": [
-        "添加URL检测功能，支持白名单",
-        "增加多种处罚方式：警告、禁言、踢出",
-        "添加自动处罚机制"
-      ]
-    },
-    {
-      "version": "0.0.1",
-      "changes": [
-        "初始版本发布",
-        "基本关键词检测功能",
-        "简单的撤回和禁言操作"
+      "required": [
+        "database"
       ]
     }
-  ]
+  },
+  "devDependencies": {
+    "@koishijs/plugin-help": "^2.3.2",
+    "@types/node": "^20.2.5",
+    "atsc": "^1.2.2",
+    "koishi": "^4.13.0",
+    "typescript": "^5.0.4"
+  },
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint --ext .ts src"
+  },
+  "contributors": [
+    "Niko <niko@niko233.com>"
+  ],
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {},
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+  "changelog": {
+    "0.0.1": "初始版本发布",
+    "0.0.2": "添加了URL检测功能",
+    "0.0.3": "添加了群组特定配置功能",
+    "0.0.4": "添加了自动处罚机制",
+    "0.0.5": "添加了预设关键词包功能",
+    "0.0.6": "优化了消息处理逻辑",
+    "0.0.7": "修复了多处BUG，优化了性能",
+    "0.0.8": "重构命令注册机制，修复命令冲突问题，优化命令结构"
+  }
 }
