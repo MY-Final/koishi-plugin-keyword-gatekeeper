@@ -344,9 +344,37 @@ export function apply(ctx: Context, options: PluginConfig) {
         )
 
         if (success) {
-          return `已成功启用群组特定配置。使用 kw.group.add-keyword 添加群组关键词。`
+          // 如果配置了自动导入预设包并且有选择默认预设包
+          if (options.autoImportPresets && options.defaultPresets && options.defaultPresets.length > 0) {
+            let response = `已成功启用群组特定配置。\n`;
+            let importResults = [];
+
+            // 导入每个默认预设包
+            for (const presetName of options.defaultPresets) {
+              ctx.logger.info(`[${session.guildId}] 自动导入预设包: ${presetName}`);
+              const result = await groupConfigManager.importPresetKeywords(
+                session.guildId,
+                presetName,
+                session.userId
+              );
+
+              if (result.total > 0) {
+                importResults.push(`- "${presetName}": 成功添加 ${result.success.length} 个关键词`);
+              }
+            }
+
+            if (importResults.length > 0) {
+              response += `\n已自动导入以下预设包:\n${importResults.join('\n')}`;
+              response += `\n\n使用 kw.group.keywords 查看已导入的关键词。`;
+              return response;
+            } else {
+              return `已成功启用群组特定配置。使用 kw.group.add-keyword 添加群组关键词。`;
+            }
+          } else {
+            return `已成功启用群组特定配置。使用 kw.group.add-keyword 添加群组关键词。`;
+          }
         } else {
-          return `启用群组特定配置失败。`
+          return `启用群组特定配置失败。`;
         }
       }
 
@@ -359,13 +387,13 @@ export function apply(ctx: Context, options: PluginConfig) {
         )
 
         if (success) {
-          return `已成功启用群组特定配置。`
+          return `已成功启用群组特定配置。`;
         } else {
-          return `启用群组特定配置失败。`
+          return `启用群组特定配置失败。`;
         }
       }
 
-      return '当前群组已启用特定配置。'
+      return '当前群组已启用特定配置。';
     })
 
   // 导入预设关键词包

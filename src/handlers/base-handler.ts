@@ -60,7 +60,7 @@ export class MessageHandler {
       try {
         if ((meta.bot as any).isAdmin?.(meta.guildId)) {
           this.ctx.logger.info(`[${meta.guildId}] 机器人通过通用方法检查为管理员`)
-          return true
+      return true
         }
       } catch (err) {
         this.ctx.logger.debug(`[${meta.guildId}] 尝试 isAdmin 方法失败: ${err?.message}`)

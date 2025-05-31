@@ -23,7 +23,7 @@ export class UrlHandler extends MessageHandler {
     // 排除所有插件命令格式
     // 1. 检查是否是插件命令
     if (message.match(/^(\/|\.)?kw(\.|\ )/i)) {
-      this.ctx.logger.info(`跳过插件命令检测: ${message}`)
+      this.ctx.logger.debug(`跳过插件命令检测: ${message}`)
       return null
     }
 
@@ -42,7 +42,7 @@ export class UrlHandler extends MessageHandler {
     ]
 
     if (pluginCommands.some(cmd => message.startsWith(cmd))) {
-      this.ctx.logger.info(`跳过特定插件命令: ${message}`)
+      this.ctx.logger.debug(`跳过特定插件命令: ${message}`)
       return null
     }
 
@@ -51,6 +51,34 @@ export class UrlHandler extends MessageHandler {
 
     // 检查是否在白名单中
     for (const url of urls) {
+      // 排除QQ表情包、图片和其他媒体资源URL
+      // 1. QQ表情包和图片常见标识
+      if (url.includes('QFace') ||
+          url.includes('/gchatpic_new/') ||
+          url.includes('/c2c-') ||
+          url.includes('/emoji/') ||
+          url.includes('/face/')) {
+        this.ctx.logger.debug(`跳过QQ表情包/图片URL: ${url}`)
+        continue
+      }
+
+      // 2. 常见媒体文件扩展名
+      const mediaExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.mp4', '.mp3', '.wav', '.webm', '.ogg'];
+      if (mediaExtensions.some(ext => url.toLowerCase().endsWith(ext))) {
+        this.ctx.logger.debug(`跳过媒体文件URL: ${url}`)
+        continue
+      }
+
+      // 3. 特殊判断资源链接
+      if (url.includes('/offical/') ||
+          url.includes('/image/') ||
+          url.includes('/sticker/') ||
+          url.includes('/resource/') ||
+          url.includes('/download?')) {
+        this.ctx.logger.debug(`跳过资源文件URL: ${url}`)
+        continue
+      }
+
       try {
         // 确保有协议前缀，以便 URL 构造函数能够正确解析
         let urlWithProtocol = url
@@ -61,11 +89,35 @@ export class UrlHandler extends MessageHandler {
         const urlObj = new URL(urlWithProtocol)
         const hostname = urlObj.hostname
 
+        // 4. 特殊处理QQ多媒体链接
+        if (hostname.includes('multimedia') ||
+            hostname.includes('media') ||
+            hostname.includes('img') ||
+            hostname.includes('pic') ||
+            hostname.includes('static') ||
+            hostname.includes('cdn')) {
+          this.ctx.logger.debug(`跳过多媒体域名URL: ${url} (${hostname})`)
+          continue
+        }
+
         // 检查域名是否在白名单中
         const isWhitelisted = whitelist.some(domain =>
           hostname === domain || hostname.endsWith(`.${domain}`))
 
         if (!isWhitelisted) {
+          // 进一步排除常见的安全域名
+          const commonSafeDomains = [
+            'qq.com', 'gtimg.com', 'qpic.cn', 'qlogo.cn',
+            'nt.qq.com.cn', 'qzone.qq.com', 'qqmail.com',
+            'tencent.com', 'myqcloud.com'
+          ];
+          if (commonSafeDomains.some(domain => hostname.endsWith(`.${domain}`) || hostname === domain)) {
+            this.ctx.logger.debug(`跳过安全域名URL: ${url} (${hostname})`)
+            continue;
+          }
+
+          // 对于实际检测到的非白名单URL，保留info级别日志
+          this.ctx.logger.info(`检测到非白名单URL: ${url} (${hostname})`)
           return url // 返回第一个不在白名单中的URL
         }
       } catch (error) {

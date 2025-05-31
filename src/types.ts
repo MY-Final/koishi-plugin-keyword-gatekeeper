@@ -49,6 +49,10 @@ export interface Config {
   allowUserSelfQuery: boolean
   // 群组特定配置
   enableGroupSpecificConfig: boolean
+  // 默认启用的预设包
+  defaultPresets: string[]
+  // 是否在群组启用特定配置时自动导入默认预设包
+  autoImportPresets: boolean
 }
 
 // 配置模式
@@ -140,5 +144,18 @@ export const ConfigSchema: Schema<Config> = Schema.intersect([
     enableGroupSpecificConfig: Schema.boolean()
       .description('是否启用群组特定配置，开启后每个群可以设置独立的关键词和提示消息')
       .default(false),
+    defaultPresets: Schema.array(Schema.union([
+      Schema.const('politics').description('政治相关敏感词汇'),
+      Schema.const('adult').description('成人内容相关敏感词汇'),
+      Schema.const('gambling').description('赌博相关敏感词汇'),
+      Schema.const('spam').description('垃圾信息相关敏感词汇'),
+      Schema.const('scam').description('诈骗相关敏感词汇'),
+      Schema.const('common').description('常见违禁词汇集合')
+    ]))
+      .description('默认启用的预设关键词包，当群组启用特定配置时会自动导入这些预设包')
+      .default(['common']),
+    autoImportPresets: Schema.boolean()
+      .description('是否在群组启用特定配置时自动导入默认预设包')
+      .default(true),
   }).description('群组配置设置'),
 ])
