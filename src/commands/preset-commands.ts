@@ -48,7 +48,8 @@ export function registerPresetCommands(ctx: Context, config: Config, database: K
 - kwpreset add <名称> <关键词> - 向预设包添加关键词
 - kwpreset remove <名称> <关键词> - 从预设包移除关键词
 - kwpreset delete <名称> - 删除预设包
-- kwpreset import <名称> [群组ID] - 将预设包导入到群组`
+- kwpreset import <名称> [群组ID] - 将预设包导入到群组
+- kwpreset unimport <名称> [群组ID] - 从群组中移除预设包`
     })
 
   // 列出所有预设包
@@ -311,5 +312,56 @@ export function registerPresetCommands(ctx: Context, config: Config, database: K
       await database.updateGroupConfig(targetGuildId, { keywords: newKeywords })
 
       return `成功将预设包 "${name}" 导入到群组 ${targetGuildId}，共添加 ${newKeywords.length - groupConfig.keywords.length} 个新关键词。`
+    })
+
+  // 从群组配置中移除预设包
+  presetCmd.subcommand('unimport <name:string> [guildId:string]', '从当前群组或指定群组中移除预设包')
+    .action(async ({ session }, name, guildId) => {
+      // 检查参数
+      if (!name) {
+        return '请提供要移除的预设包名称。'
+      }
+
+      // 使用当前群组ID或指定的群组ID
+      const targetGuildId = guildId || session.guildId
+      if (!targetGuildId) {
+        return '请在群组中使用此命令，或指定目标群组ID。'
+      }
+
+      // 检查权限
+      if (!await checkPermission(session, true)) {
+        return '你没有权限从群组移除预设包。'
+      }
+
+      // 获取预设包
+      const preset = await database.getPresetPackage(name)
+      if (!preset) {
+        return `找不到名为 "${name}" 的预设包。`
+      }
+
+      // 获取群组配置
+      const groupConfig = await database.getGroupConfig(targetGuildId)
+      if (!groupConfig) {
+        return `群组 ${targetGuildId} 未配置关键词守门员。`
+      }
+
+      // 如果群组没有启用，则返回错误
+      if (!groupConfig.enabled) {
+        return `群组 ${targetGuildId} 未启用关键词守门员。`
+      }
+
+      // 移除预设包中的关键词
+      const originalKeywordsCount = groupConfig.keywords.length;
+      const newKeywords = groupConfig.keywords.filter(keyword => !preset.keywords.includes(keyword));
+
+      // 如果没有关键词被移除，则返回提示
+      if (newKeywords.length === originalKeywordsCount) {
+        return `群组 ${targetGuildId} 中没有找到预设包 "${name}" 中的任何关键词。`
+      }
+
+      // 更新群组配置
+      await database.updateGroupConfig(targetGuildId, { keywords: newKeywords });
+
+      return `成功从群组 ${targetGuildId} 中移除预设包 "${name}"，共移除 ${originalKeywordsCount - newKeywords.length} 个关键词。`;
     })
 }

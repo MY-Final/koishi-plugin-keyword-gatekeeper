@@ -43,6 +43,16 @@ export class WarningManager {
     this.ctx = ctx
     this.instanceId = ++WarningManager.instanceCount
 
+    // 检查是否启用调试模式
+    try {
+      const config = ctx.config.keyword_gatekeeper || {}
+      if (config.enableDebugMode) {
+        this.enableDebugLog = true
+      }
+    } catch (error) {
+      // 忽略错误
+    }
+
     // 数据库初始化
     this.ctx.on('ready', async () => {
       await this.initDatabase()
@@ -53,6 +63,19 @@ export class WarningManager {
         this.logDebug('警告记录管理器已初始化 (实例 ' + this.instanceId + ')')
       }
     })
+  }
+
+  /**
+   * 设置调试模式
+   * @param enable 是否启用调试模式
+   */
+  public setDebugMode(enable: boolean): void {
+    this.enableDebugLog = enable
+    if (enable) {
+      this.ctx.logger.debug('WarningManager调试日志已启用')
+    } else {
+      this.ctx.logger.info('WarningManager调试日志已禁用')
+    }
   }
 
   /**
@@ -258,7 +281,7 @@ export class WarningManager {
     }
 
     // 记录更新前后的计数，用于调试
-    this.ctx.logger.info(`记录 ${key} 更新计数: 之前=${oldCount}, 之后=${record.count}`)
+    this.logDebug(`记录 ${key} 更新计数: 之前=${oldCount}, 之后=${record.count}`)
 
     if (triggerInfo) {
       // 更新最近的触发信息
@@ -353,7 +376,7 @@ export class WarningManager {
 
     const key = this.getRecordKey(userId, guildId)
     this.logDebug(`查询记录: ${key}`)
-    this.ctx.logger.info(`查询警告记录: ${key}`)
+    this.logDebug(`查询警告记录: ${key}`)
 
     // 从数据库查询记录
     const records = await this.ctx.database.get('keyword_warnings', {
@@ -362,11 +385,11 @@ export class WarningManager {
     })
 
     // 打印当前所有记录
-    this.ctx.logger.info('当前所有警告记录:')
+    this.logDebug('当前所有警告记录:')
     const allRecords = await this.ctx.database.get('keyword_warnings', {})
     allRecords.forEach(record => {
       const recordKey = this.getRecordKey(record.userId, record.guildId)
-      this.ctx.logger.info(`  ${recordKey}: 次数=${record.count}, 最后时间=${new Date(record.lastTriggerTime).toLocaleString()}`)
+      this.logDebug(`  ${recordKey}: 次数=${record.count}, 最后时间=${new Date(record.lastTriggerTime).toLocaleString()}`)
     })
 
     // 如果没有记录，创建一个空记录
@@ -488,7 +511,7 @@ export class WarningManager {
     if (!this.dbInitialized) await this.initDatabase()
 
     const key = this.getRecordKey(userId, guildId)
-    this.ctx.logger.info(`尝试清零记录: ${key}`)
+    this.logDebug(`尝试清零记录: ${key}`)
 
     // 查询是否存在记录
     const records = await this.ctx.database.get('keyword_warnings', {
@@ -498,7 +521,7 @@ export class WarningManager {
 
     if (records.length === 0) {
       this.logDebug(`尝试重置不存在的记录: ${key}`)
-      this.ctx.logger.info(`尝试重置不存在的记录: ${key}`)
+      this.logDebug(`尝试重置不存在的记录: ${key}`)
       return false
     }
 
@@ -534,14 +557,14 @@ export class WarningManager {
 
     const userIds: string[] = []
     this.logDebug(`获取所有警告记录${guildId ? ` (群组: ${guildId})` : ''}`)
-    this.ctx.logger.info(`获取所有警告记录${guildId ? ` (群组: ${guildId})` : ''}`)
+    this.logDebug(`获取所有警告记录${guildId ? ` (群组: ${guildId})` : ''}`)
 
     // 打印当前所有记录
-    this.ctx.logger.info('当前所有警告记录:')
+    this.logDebug('当前所有警告记录:')
     const allRecords = await this.ctx.database.get('keyword_warnings', {})
     allRecords.forEach(record => {
       const recordKey = this.getRecordKey(record.userId, record.guildId)
-      this.ctx.logger.info(`  ${recordKey}: 次数=${record.count}, 最后时间=${new Date(record.lastTriggerTime).toLocaleString()}`)
+      this.logDebug(`  ${recordKey}: 次数=${record.count}, 最后时间=${new Date(record.lastTriggerTime).toLocaleString()}`)
     })
 
     // 计算重置时间
@@ -575,7 +598,7 @@ export class WarningManager {
       const isExpired = record.lastTriggerTime === 0 || elapsedTime > resetTimeMs
 
       if (isExpired) {
-        this.ctx.logger.info(`  跳过过期记录: ${record.guildId}:${record.userId}, 最后时间: ${new Date(record.lastTriggerTime).toLocaleString()}, 已过期: ${elapsedTime / (60 * 60 * 1000)} 小时`)
+        this.logDebug(`  跳过过期记录: ${record.guildId}:${record.userId}, 最后时间: ${new Date(record.lastTriggerTime).toLocaleString()}, 已过期: ${elapsedTime / (60 * 60 * 1000)} 小时`)
         continue
       }
 
@@ -583,11 +606,11 @@ export class WarningManager {
       validRecords++
       userIds.push(record.userId)
       this.logDebug(`  找到记录: ${record.guildId}:${record.userId}, 次数=${record.count}`)
-      this.ctx.logger.info(`  找到记录: ${record.guildId}:${record.userId}, 次数=${record.count}, 最后时间: ${new Date(record.lastTriggerTime).toLocaleString()}`)
+      this.logDebug(`  找到记录: ${record.guildId}:${record.userId}, 次数=${record.count}, 最后时间: ${new Date(record.lastTriggerTime).toLocaleString()}`)
     }
 
     this.logDebug(`共找到 ${userIds.length} 条记录`)
-    this.ctx.logger.info(`统计: 总记录数=${totalRecords}, 有效记录数=${validRecords}, 符合条件记录数=${userIds.length}`)
+    this.logDebug(`统计: 总记录数=${totalRecords}, 有效记录数=${validRecords}, 符合条件记录数=${userIds.length}`)
     return userIds
   }
 
@@ -622,7 +645,7 @@ export class WarningManager {
       if (record.count > 0 && !isExpired) {
         // 保留有效记录
         kept++
-        this.ctx.logger.info(`保留记录: ${record.guildId}:${record.userId}, 次数=${record.count}, 最后时间=${new Date(record.lastTriggerTime).toLocaleString()}`)
+        this.logDebug(`保留记录: ${record.guildId}:${record.userId}, 次数=${record.count}, 最后时间=${new Date(record.lastTriggerTime).toLocaleString()}`)
       } else {
         // 重置过期记录
         await this.ctx.database.set('keyword_warnings', {
@@ -641,7 +664,7 @@ export class WarningManager {
         })
 
         reset++
-        this.ctx.logger.info(`重置记录: ${record.guildId}:${record.userId}`)
+        this.logDebug(`重置记录: ${record.guildId}:${record.userId}`)
       }
     }
 
@@ -698,6 +721,60 @@ export class WarningManager {
     } catch (error) {
       this.ctx.logger.error(`获取记录数量失败: ${error.message}`)
       return 0
+    }
+  }
+
+  /**
+   * 获取缓存中的记录数量
+   */
+  getCacheSize(): number {
+    return this.punishmentRecords.size
+  }
+
+  /**
+   * 同步所有警告记录（从数据库到内存缓存）
+   */
+  async syncFromDatabase(): Promise<boolean> {
+    // 确保数据库已初始化
+    if (!this.dbInitialized) await this.initDatabase()
+
+    try {
+      // 清空当前缓存
+      this.punishmentRecords.clear()
+
+      // 获取所有记录
+      const records = await this.ctx.database.get('keyword_warnings', {})
+
+      // 将记录加载到缓存
+      records.forEach(record => {
+        const key = this.getRecordKey(record.userId, record.guildId)
+        this.punishmentRecords.set(key, {
+          userId: record.userId,
+          count: record.count,
+          lastTriggerTime: record.lastTriggerTime
+        })
+      })
+
+      this.ctx.logger.info(`已同步 ${records.length} 条警告记录到内存缓存`)
+      return true
+    } catch (error) {
+      this.ctx.logger.error(`同步警告记录失败: ${error.message}`)
+      return false
+    }
+  }
+
+  /**
+   * 清空所有警告记录（从内存缓存中）
+   */
+  async clearCache(): Promise<boolean> {
+    try {
+      // 清空内存缓存
+      this.punishmentRecords.clear()
+      this.ctx.logger.info('已清空内存缓存中的所有警告记录')
+      return true
+    } catch (error) {
+      this.ctx.logger.error(`清空缓存记录失败: ${error.message}`)
+      return false
     }
   }
 }

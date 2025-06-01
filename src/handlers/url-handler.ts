@@ -249,58 +249,24 @@ export class UrlHandler extends MessageHandler {
         }
       )
     }
-    else if (violationCount === 2) {
-      // 第二次：禁言自定义时长
-      const muteDuration = config.secondViolationMuteDuration
-      const muted = await this.muteUser(meta, muteDuration)
-      if (muted) {
-        const durationText = this.formatDuration(muteDuration)
-        message = `您发送了非白名单网址"${matchedUrl}"，这是第二次违规，已禁言${durationText}。`
-        actionTaken = true
+    else if (violationCount >= 2) {
+      // 计算禁言时长，随违规次数递增
+      let muteDuration = 0;
 
-        // 更新处罚类型为禁言
-        await this.warningManager.updateUserPunishmentRecord(
-          meta.userId,
-          config,
-          meta.guildId,
-          {
-            keyword: matchedUrl,
-            type: 'url',
-            action: 'mute',
-            messageContent: this.getMessageContent(meta)
-          }
-        )
+      if (violationCount === 2) {
+        // 第二次违规：使用配置的第二次违规禁言时长
+        muteDuration = config.secondViolationMuteDuration;
+        this.ctx.logger.info(`[${meta.guildId}] 第二次违规，禁言时长: ${muteDuration}秒`);
       }
-    }
-    else if (violationCount >= config.maxViolationCount) {
-      // 达到最大违规次数：根据配置踢出或长时间禁言
-      if (config.kickOnMaxViolation) {
-        const kicked = await this.kickUser(meta)
-        if (kicked) {
-          message = `用户 ${meta.username || meta.userId} 因多次发送非白名单网址"${matchedUrl}"已被踢出群聊。`
-          actionTaken = true
-
-          // 更新处罚类型为踢出
-          await this.warningManager.updateUserPunishmentRecord(
-            meta.userId,
-            config,
-            meta.guildId,
-            {
-              keyword: matchedUrl,
-              type: 'url',
-              action: 'kick',
-              messageContent: this.getMessageContent(meta)
-            }
-          )
-        } else {
-          // 如果踢出失败，尝试禁言
-          const longMuteDuration = 3600 // 1小时
-          const muted = await this.muteUser(meta, longMuteDuration)
-          if (muted) {
-            message = `您发送了非白名单网址"${matchedUrl}"，这是第${violationCount}次违规，已禁言1小时。`
+      else if (violationCount >= config.maxViolationCount) {
+        // 达到最大违规次数
+        if (config.kickOnMaxViolation) {
+          const kicked = await this.kickUser(meta)
+          if (kicked) {
+            message = `用户 ${meta.username || meta.userId} 因多次发送非白名单网址"${matchedUrl}"已被踢出群聊。`
             actionTaken = true
 
-            // 更新处罚类型为禁言
+            // 更新处罚类型为踢出
             await this.warningManager.updateUserPunishmentRecord(
               meta.userId,
               config,
@@ -308,18 +274,32 @@ export class UrlHandler extends MessageHandler {
               {
                 keyword: matchedUrl,
                 type: 'url',
-                action: 'mute',
+                action: 'kick',
                 messageContent: this.getMessageContent(meta)
               }
             )
+            return actionTaken; // 踢出后不需要继续处理
           }
+          // 如果踢出失败，使用长时间禁言
+          muteDuration = 3600; // 1小时
+        } else {
+          // 配置为不踢出，使用长时间禁言
+          muteDuration = 3600; // 1小时
         }
-      } else {
-        // 配置为不踢出，只禁言
-        const longMuteDuration = 3600 // 1小时
-        const muted = await this.muteUser(meta, longMuteDuration)
+      }
+      else {
+        // 中间违规次数：禁言时间按倍数递增
+        // 使用第二次违规时长的倍数：(违规次数-1)倍
+        muteDuration = config.secondViolationMuteDuration * (violationCount - 1);
+        this.ctx.logger.info(`[${meta.guildId}] 第${violationCount}次违规，禁言时长: ${muteDuration}秒 (${config.secondViolationMuteDuration} × ${violationCount-1})`);
+      }
+
+      // 执行禁言
+      if (muteDuration > 0) {
+        const muted = await this.muteUser(meta, muteDuration)
         if (muted) {
-          message = `您发送了非白名单网址"${matchedUrl}"，这是第${violationCount}次违规，已禁言1小时。`
+          const durationText = this.formatDuration(muteDuration)
+          message = `您发送了非白名单网址"${matchedUrl}"，这是第${violationCount}次违规，已禁言${durationText}。`
           actionTaken = true
 
           // 更新处罚类型为禁言
@@ -335,30 +315,6 @@ export class UrlHandler extends MessageHandler {
             }
           )
         }
-      }
-    }
-    else {
-      // 介于第二次和最大次数之间的违规：禁言时间递增
-      // 禁言时间随违规次数增加而增加
-      const muteDuration = Math.min(config.secondViolationMuteDuration * (violationCount - 1), 7200) // 最多2小时
-      const muted = await this.muteUser(meta, muteDuration)
-      if (muted) {
-        const durationText = this.formatDuration(muteDuration)
-        message = `您发送了非白名单网址"${matchedUrl}"，这是第${violationCount}次违规，已禁言${durationText}。`
-        actionTaken = true
-
-        // 更新处罚类型为禁言
-        await this.warningManager.updateUserPunishmentRecord(
-          meta.userId,
-          config,
-          meta.guildId,
-          {
-            keyword: matchedUrl,
-            type: 'url',
-            action: 'mute',
-            messageContent: this.getMessageContent(meta)
-          }
-        )
       }
     }
 

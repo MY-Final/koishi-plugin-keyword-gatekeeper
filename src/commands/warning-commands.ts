@@ -352,15 +352,14 @@ export function registerWarningCommands(ctx: Context, config: Config, warningCmd
         // 获取所有记录
         const records = await ctx.database.get('keyword_warnings', {})
 
-        // 清空每条记录
-        for (const record of records) {
-          await ctx.database.set('keyword_warnings', {
-            id: record.id
-          }, {
-            count: 0,
-            lastTriggerTime: 0
-          })
+        if (records.length === 0) {
+          return '没有警告记录可以清除。'
         }
+
+        // 执行清空操作
+        await ctx.database.remove('keyword_warnings', {})
+        // 同时清空内存缓存
+        await warningManager.clearCache()
 
         return `已成功清空所有警告记录，共清空 ${records.length} 条记录。`
       } catch (error) {

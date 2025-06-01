@@ -69,60 +69,60 @@ export interface Config {
   showPresetContent: boolean
   // 是否允许自定义预设包
   allowCustomPresets: boolean
+  // 是否启用调试模式
+  enableDebugMode: boolean
 }
 
 // 配置模式
 export const ConfigSchema: Schema<Config> = Schema.intersect([
   Schema.object({
-    keywords: Schema.array(String)
-      .description('需要检测的关键词列表，每个关键词单独添加')
-      .default([]),
-    useRegex: Schema.boolean()
-      .description('是否将关键词作为正则表达式处理，启用后可以使用更复杂的匹配规则')
-      .default(false),
-    regexFlags: Schema.string()
-      .description('正则表达式标志：i-忽略大小写, g-全局匹配, m-多行匹配, s-允许.匹配换行符')
-      .default('i'),
+  keywords: Schema.array(String)
+    .description('需要检测的关键词列表，每个关键词单独添加')
+    .default([]),
+  useRegex: Schema.boolean()
+    .description('是否将关键词作为正则表达式处理，启用后可以使用更复杂的匹配规则')
+    .default(false),
+  regexFlags: Schema.string()
+    .description('正则表达式标志：i-忽略大小写, g-全局匹配, m-多行匹配, s-允许.匹配换行符')
+    .default('i'),
   }).description('关键词检测设置'),
 
   Schema.object({
-    recall: Schema.boolean()
-      .description('是否撤回包含关键词的消息，开启后机器人将尝试删除触发的消息')
-      .default(true),
-    mute: Schema.boolean()
-      .description('是否禁言发送包含关键词消息的用户，需要机器人具有管理员权限')
-      .default(true),
-    muteDuration: Schema.number()
-      .description('关键词触发后的禁言时长（秒），建议设置为60-600之间')
-      .min(1)
-      .max(2592000) // 30天上限
-      .default(600),
-    customMessage: Schema.string()
-      .description('检测到关键词后的提示消息，可使用@提醒用户，留空则不发送提示')
-      .default('检测到违规内容，已进行处理'),
+  recall: Schema.boolean()
+    .description('是否撤回包含关键词的消息，开启后机器人将尝试删除触发的消息')
+    .default(true),
+  mute: Schema.boolean()
+    .description('是否禁言发送包含关键词消息的用户，需要机器人具有管理员权限')
+    .default(true),
+  muteDuration: Schema.number()
+    .description('禁言时长（单位：秒）')
+    .default(300),
+  customMessage: Schema.string()
+    .description('检测到关键词后的提示消息，可使用@提醒用户，留空则不发送提示')
+    .default('检测到违规内容，已进行处理'),
   }).description('关键词处理设置'),
 
   Schema.object({
-    detectUrls: Schema.boolean()
-      .description('是否启用网址检测功能，可以检测并处理消息中的URL链接')
-      .default(true),
-    urlWhitelist: Schema.array(String)
-      .description('网址白名单，这些域名及其子域名不会被检测，例如：koishi.chat, github.com')
-      .default([]),
-    urlAction: Schema.union([
-      Schema.const('recall').description('仅撤回消息'),
-      Schema.const('mute').description('仅禁言用户'),
-      Schema.const('both').description('撤回消息并禁言用户')
-    ])
-      .description('检测到非白名单网址后要执行的操作')
-      .default('both'),
-    urlMuteDuration: Schema.number()
-      .description('检测到网址后的禁言时长（秒），可以与关键词禁言时长不同')
-      .min(1)
-      .max(2592000) // 30天上限
-      .default(300),
-    urlCustomMessage: Schema.string()
-      .description('检测到非白名单网址后的提示消息，留空则不发送提示')
+  detectUrls: Schema.boolean()
+    .description('是否启用网址检测功能，可以检测并处理消息中的URL链接')
+    .default(true),
+  urlWhitelist: Schema.array(String)
+    .description('网址白名单，这些域名及其子域名不会被检测，例如：koishi.chat, github.com')
+    .default([]),
+  urlAction: Schema.union([
+    Schema.const('recall').description('仅撤回消息'),
+    Schema.const('mute').description('仅禁言用户'),
+    Schema.const('both').description('撤回消息并禁言用户')
+  ])
+    .description('检测到非白名单网址后要执行的操作')
+    .default('both'),
+  urlMuteDuration: Schema.number()
+    .description('检测到网址后的禁言时长（秒），可以与关键词禁言时长不同')
+    .min(1)
+    .max(2592000) // 30天上限
+    .default(300),
+  urlCustomMessage: Schema.string()
+    .description('检测到非白名单网址后的提示消息，留空则不发送提示')
       .default('检测到未经允许的网址链接，已进行处理'),
   }).description('网址检测设置'),
 
@@ -186,4 +186,10 @@ export const ConfigSchema: Schema<Config> = Schema.intersect([
       .description('是否允许创建和管理自定义预设包，开启后可以创建、编辑和删除自定义预设包')
       .default(true),
   }).description('预设包设置'),
+
+  Schema.object({
+    enableDebugMode: Schema.boolean()
+      .description('是否启用调试模式，开启后将显示更详细的日志信息，用于排查问题')
+      .default(false),
+  }).description('调试设置'),
 ])

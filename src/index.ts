@@ -65,6 +65,8 @@ export const usage = `## 🔰 插件说明
 - \`kw warn my\` - 查询自己的警告记录
 - \`kw warn myhistory\` - 查看自己的完整警告历史
 - \`kw warn query @用户\` - 查询指定用户的警告记录
+- \`kw warn history @用户\` - 查看指定用户的完整警告历史
+- \`kw warn reset @用户\` - 清零指定用户的警告记录
 - \`kw preset list\` - 列出所有预设包
 - \`kw preset view <名称>\` - 查看预设包内容
 - \`kw group keywords\` - 查看当前群组的关键词列表`
@@ -101,11 +103,62 @@ async function checkPermission(session: any, requireAdmin: boolean = false): Pro
 export function apply(ctx: Context, config: Config) {
   // 创建日志记录器
   const logger = ctx.logger('keyword-gatekeeper')
+
+  // 确保启用撤回功能
+  if (config.recall === undefined) {
+    config.recall = true
+  }
+
+  // 强制初始化关键词列表
+  if (!config.keywords) {
+    config.keywords = []
+  }
+
+  // 确保关键词列表中有测试关键词
+  const testKeywords = ['kun', 'kunkun', '坤', '坤坤']
+  for (const keyword of testKeywords) {
+    if (!config.keywords.includes(keyword)) {
+      config.keywords.push(keyword)
+      logger.info(`已添加测试关键词: ${keyword}`)
+    }
+  }
+
+  // 输出初始配置信息
+  logger.info('关键词守门员插件启动中...')
+  logger.info(`插件版本: 2.0.0`)
+  logger.info(`正则模式: ${config.useRegex ? '已启用' : '未启用'}, 正则标志: ${config.regexFlags || 'i'}`)
+
+  // 检查关键词配置
+  if (config.keywords && config.keywords.length > 0) {
+    logger.info(`全局关键词(${config.keywords.length}个): ${config.keywords.join(', ')}`)
+  } else {
+    logger.warn('未配置全局关键词，请确认是否需要添加关键词')
+  }
+
+  // 检查URL配置
+  if (config.detectUrls) {
+    logger.info(`URL检测已启用，白名单域名: ${config.urlWhitelist.length > 0 ? config.urlWhitelist.join(', ') : '无'}`)
+  }
+
+  // 根据调试模式设置日志级别
+  if (config.enableDebugMode) {
+    logger.level = 1 // debug级别
+    logger.debug('调试模式已启用，日志级别设置为debug')
+  } else {
+    logger.level = 2 // info级别
+    logger.info('调试模式未启用，日志级别设置为info')
+  }
+
   logger.info('关键词守门员插件启动中...')
 
   // 初始化数据库
   const database = new KeywordDatabase(ctx)
   const warningManager = new WarningManager(ctx)
+
+  // 设置初始调试模式状态
+  if (config.enableDebugMode) {
+    warningManager.setDebugMode(true)
+  }
 
   // 初始化系统预设包
   initializePresetPackages(ctx, database).then(() => {
@@ -120,6 +173,38 @@ export function apply(ctx: Context, config: Config) {
     .action(async ({ session }) => {
       // 直接显示命令帮助
       return '关键词守门员插件，用于检测和处理群聊中的敏感关键词和非白名单URL。\n\n可用命令：\nkw key - 关键词管理\nkw url - URL白名单管理\nkw warn - 警告记录管理\nkw preset - 预设包管理\nkw group - 群组配置'
+    })
+
+  // 添加调试模式切换命令
+  ctx.command('kw.debug', '调试模式管理')
+    .option('enable', '-e 启用调试模式', { fallback: false })
+    .option('disable', '-d 禁用调试模式', { fallback: false })
+    .action(async ({ session, options }) => {
+      // 检查权限
+      if (!await checkPermission(session, true)) {
+        return '权限不足，需要超级管理员权限才能管理调试模式。'
+      }
+
+      if (options.enable) {
+        // 启用调试模式
+        config.enableDebugMode = true
+        logger.level = 1 // debug级别
+        logger.debug('调试模式已启用，日志级别设置为debug')
+        // 传递调试模式状态给WarningManager
+        warningManager.setDebugMode(true)
+        return '调试模式已启用，将显示更详细的日志信息'
+      } else if (options.disable) {
+        // 禁用调试模式
+        config.enableDebugMode = false
+        logger.level = 2 // info级别
+        logger.info('调试模式已禁用，日志级别设置为info')
+        // 传递调试模式状态给WarningManager
+        warningManager.setDebugMode(false)
+        return '调试模式已禁用，将只显示重要的日志信息'
+      } else {
+        // 显示当前状态
+        return `调试模式当前状态: ${config.enableDebugMode ? '已启用' : '未启用'}\n使用 kw.debug -e 启用调试模式\n使用 kw.debug -d 禁用调试模式`
+      }
     })
 
   // 🔑 关键词管理命令
@@ -192,7 +277,36 @@ export function apply(ctx: Context, config: Config) {
         return '当前没有设置全局关键词。'
       }
 
-      return `全局关键词列表 (${config.keywords.length}个):\n${config.keywords.join('\n')}`
+      // 获取群组关键词(如果有)
+      let groupKeywords = []
+      if (config.enableGroupSpecificConfig && session.guildId) {
+        const groupConfig = await database.getGroupConfig(session.guildId)
+        if (groupConfig && groupConfig.enabled && groupConfig.keywords && groupConfig.keywords.length > 0) {
+          groupKeywords = groupConfig.keywords
+        }
+      }
+
+      let result = `关键词匹配模式: ${config.useRegex ? '正则表达式' : '普通文本'}`
+      if (config.useRegex) {
+        result += `, 标志: ${config.regexFlags || 'i'}`
+      }
+      result += '\n\n'
+
+      result += `全局关键词列表 (${config.keywords.length}个):\n`
+      config.keywords.forEach((keyword, index) => {
+        result += `${index + 1}. ${keyword}\n`
+      })
+
+      if (groupKeywords.length > 0) {
+        result += `\n当前群组关键词 (${groupKeywords.length}个):\n`
+        groupKeywords.forEach((keyword, index) => {
+          result += `${index + 1}. ${keyword}\n`
+        })
+      }
+
+      result += '\n提示: 可使用 kw.test <文本> 命令测试关键词匹配'
+
+      return result
     })
 
   // 清空所有关键词
@@ -288,7 +402,7 @@ export function apply(ctx: Context, config: Config) {
   // ⚠️ 警告管理命令
   ctx.command('kw.warn', '关键词警告记录相关命令')
     .action(async ({ session }) => {
-      return '警告记录管理命令。\n\n可用的子命令有：\nkw warn my - 查询自己的警告记录\nkw warn myhistory - 查看自己的完整警告历史\nkw warn query <@用户> - 查询指定用户的警告记录\nkw warn history <@用户> - 查看指定用户的完整警告历史\nkw warn reset <@用户> - 清零指定用户的警告记录'
+      return '警告记录管理命令。\n\n可用的子命令有：\nkw warn my - 查询自己的警告记录\nkw warn myhistory - 查看自己的完整警告历史\nkw warn query <@用户> - 查询指定用户的警告记录\nkw warn history <@用户> - 查看指定用户的完整警告历史\nkw warn reset <@用户> - 清零指定用户的警告记录\n\n管理员专用命令：\nkw warn list - 列出所有有警告记录的用户\nkw warn debug - 查看所有警告记录的详细信息（调试用）\nkw warn sync - 强制同步所有警告记录\nkw warn clear-all - 清空所有警告记录'
     })
 
   // 查询自己的警告记录
@@ -411,9 +525,224 @@ export function apply(ctx: Context, config: Config) {
         }
 
         return response
-    } catch (error) {
+      } catch (error) {
         ctx.logger.error(`查询警告记录失败: ${error.message}`)
         return '查询警告记录时出错，请稍后再试。'
+      }
+    })
+
+  // 查看指定用户的完整警告历史
+  ctx.command('kw.warn.history <userId:string>', '查看指定用户的完整警告历史')
+    .action(async ({ session }, userId) => {
+      // 检查权限
+      if (!await checkPermission(session)) {
+        return '权限不足，需要管理员权限才能查看其他用户的警告历史。'
+      }
+
+      // 检查是否在群聊中
+      if (!session.guildId) {
+        return '此命令只能在群聊中使用。'
+      }
+
+      // 提取用户ID
+      let targetUserId = userId
+      if (userId && userId.startsWith('<at id="') && userId.endsWith('"/>')) {
+        targetUserId = userId.substring(8, userId.length - 3)
+      }
+
+      if (!targetUserId) {
+        return '请提供要查询的用户ID或@用户。'
+      }
+
+      // 查询记录
+      try {
+        const record = await warningManager.queryUserWarningRecord(targetUserId, config, session.guildId)
+
+        if (record.count === 0 || !record.history || record.history.length === 0) {
+          return `用户 ${targetUserId} 当前没有警告历史记录。`
+        }
+
+        let response = `用户 ${targetUserId} 的完整警告历史记录 (共${record.history.length}条):\n`
+
+        // 添加历史记录
+        record.history.forEach((item, index) => {
+          response += `${index + 1}. ${item.timeFormatted || new Date(item.time).toLocaleString()} - `
+          response += `${item.type === 'keyword' ? '关键词' : 'URL'} "${item.keyword}" `
+          response += `(${item.action === 'warn' ? '警告' : item.action === 'mute' ? '禁言' : '踢出'})\n`
+          if (item.message) {
+            response += `   消息内容: ${item.message.length > 50 ? item.message.substring(0, 50) + '...' : item.message}\n`
+          }
+        })
+
+        return response
+      } catch (error) {
+        ctx.logger.error(`查询警告历史失败: ${error.message}`)
+        return '查询警告历史时出错，请稍后再试。'
+      }
+    })
+
+  // 清零指定用户的警告记录
+  ctx.command('kw.warn.reset <userId:string>', '清零指定用户的警告记录')
+    .action(async ({ session }, userId) => {
+      // 检查权限
+      if (!await checkPermission(session)) {
+        return '权限不足，需要管理员权限才能清零用户的警告记录。'
+      }
+
+      // 检查是否在群聊中
+      if (!session.guildId) {
+        return '此命令只能在群聊中使用。'
+      }
+
+      // 提取用户ID
+      let targetUserId = userId
+      if (userId && userId.startsWith('<at id="') && userId.endsWith('"/>')) {
+        targetUserId = userId.substring(8, userId.length - 3)
+      }
+
+      if (!targetUserId) {
+        return '请提供要清零警告记录的用户ID或@用户。'
+      }
+
+      // 清零记录
+      try {
+        const success = await warningManager.resetUserWarningRecord(targetUserId, session.guildId)
+
+        if (success) {
+          return `已成功清零用户 ${targetUserId} 的警告记录。`
+        } else {
+          return `用户 ${targetUserId} 当前没有警告记录，无需清零。`
+        }
+      } catch (error) {
+        ctx.logger.error(`清零警告记录失败: ${error.message}`)
+        return '清零警告记录时出错，请稍后再试。'
+      }
+    })
+
+   // 列出所有有警告记录的用户
+  ctx.command('kw.warn.list', '列出所有有警告记录的用户')
+    .action(async ({ session }) => {
+      // 检查权限
+      if (!await checkPermission(session)) {
+        return '权限不足，需要管理员权限才能查看所有用户的警告记录。'
+      }
+
+      // 检查是否在群聊中
+      if (!session.guildId) {
+        return '此命令只能在群聊中使用。'
+      }
+
+      // 获取所有有警告记录的用户
+      try {
+        const userIds = await warningManager.getAllWarnedUserIds(session.guildId, config)
+
+        if (userIds.length === 0) {
+          return '当前没有用户有警告记录。'
+        }
+
+        let response = `当前有警告记录的用户 (共${userIds.length}人):\n`
+
+        // 添加用户列表
+        for (let i = 0; i < userIds.length; i++) {
+          const userId = userIds[i]
+          const record = await warningManager.queryUserWarningRecord(userId, config, session.guildId)
+          response += `${i + 1}. 用户 ${userId} - 违规次数: ${record.count}, 重置时间: ${record.resetTime}\n`
+        }
+
+        return response
+      } catch (error) {
+        ctx.logger.error(`列出警告记录失败: ${error.message}`)
+        return '列出警告记录时出错，请稍后再试。'
+      }
+    })
+
+  // 查看所有警告记录的详细信息（调试用）
+  ctx.command('kw.warn.debug', '查看所有警告记录的详细信息（调试用）')
+    .action(async ({ session }) => {
+      // 检查权限
+      if (!await checkPermission(session, true)) {
+        return '权限不足，需要超级管理员权限才能查看调试信息。'
+      }
+
+      // 获取调试信息
+      try {
+        const records = await ctx.database.get('keyword_warnings', {})
+
+        if (!records || records.length === 0) {
+          return '数据库中没有警告记录。'
+        }
+
+        let response = `数据库警告记录 (共${records.length}条):\n\n`
+
+        // 显示前10条记录的详细信息
+        const displayRecords = records.slice(0, 10)
+        displayRecords.forEach((record, index) => {
+          response += `记录 ${index + 1}:\n`
+          response += `用户ID: ${record.userId}\n`
+          response += `群组ID: ${record.guildId || '全局'}\n`
+          response += `违规次数: ${record.count}\n`
+          response += `最后触发时间: ${new Date(record.lastTriggerTime).toLocaleString()}\n`
+          response += `最后触发内容: ${record.lastTriggerKeyword || '无'}\n`
+          response += `最后触发类型: ${record.lastTriggerType || '无'}\n`
+          response += `最后处理方式: ${record.lastActionType || '无'}\n\n`
+        });
+
+        if (records.length > 10) {
+          response += `...还有 ${records.length - 10} 条记录未显示\n`
+        }
+
+        response += `\n内存缓存中有 ${warningManager.getCacheSize ? warningManager.getCacheSize() : '未知'} 条记录`
+
+        return response
+      } catch (error) {
+        ctx.logger.error(`获取调试信息失败: ${error.message}`)
+        return '获取调试信息时出错，请稍后再试。'
+      }
+    })
+
+  // 强制同步所有警告记录
+  ctx.command('kw.warn.sync', '强制同步所有警告记录')
+    .action(async ({ session }) => {
+      // 检查权限
+      if (!await checkPermission(session, true)) {
+        return '权限不足，需要超级管理员权限才能同步警告记录。'
+      }
+
+      // 同步记录
+      try {
+        await warningManager.syncFromDatabase()
+        return '已成功同步所有警告记录。'
+      } catch (error) {
+        ctx.logger.error(`同步警告记录失败: ${error.message}`)
+        return '同步警告记录时出错，请稍后再试。'
+      }
+    })
+
+  // 清空所有警告记录
+  ctx.command('kw.warn.clear-all', '清空所有警告记录')
+    .action(async ({ session }) => {
+      // 检查权限
+      if (!await checkPermission(session, true)) {
+        return '权限不足，需要超级管理员权限才能清空所有警告记录。'
+      }
+
+      // 清空记录
+      try {
+        // 先查询记录数
+        const recordCount = await warningManager.getRecordCount()
+        if (recordCount === 0) {
+          return '没有警告记录可以清除。'
+        }
+
+        // 执行清空操作
+        await ctx.database.remove('keyword_warnings', {})
+        // 同时清空内存缓存
+        await warningManager.clearCache()
+
+        return `已成功清空所有警告记录，共删除了 ${recordCount} 条记录。`
+      } catch (error) {
+        ctx.logger.error(`清空警告记录失败: ${error.message}`)
+        return '清空警告记录时出错，请稍后再试。'
       }
     })
 
@@ -862,6 +1191,95 @@ export function apply(ctx: Context, config: Config) {
       await database.updateGroupConfig(session.guildId, { keywords: groupConfig.keywords })
 
       return `已成功添加群组关键词: ${trimmedKeyword}\n当前群组共有 ${groupConfig.keywords.length} 个关键词。`
+    })
+
+  // 添加关键词测试命令
+  ctx.command('kw.test <text:text>', '测试文本是否会触发关键词')
+    .action(async ({ session }, text) => {
+      // 检查权限
+      if (!await checkPermission(session)) {
+        return '权限不足，需要管理员权限才能使用测试功能。'
+      }
+
+      if (!text || text.trim() === '') {
+        return '请提供要测试的文本内容。'
+      }
+
+      logger.info(`[${session.guildId}] 管理员 ${session.userId} 正在测试文本: ${text}`)
+
+      // 获取适用的关键词列表
+      let keywords = config.keywords || []
+      let groupKeywords = []
+
+      // 如果启用了群组特定配置，尝试获取群组关键词
+      if (config.enableGroupSpecificConfig && session.guildId) {
+        const groupConfig = await database.getGroupConfig(session.guildId)
+        if (groupConfig && groupConfig.enabled && groupConfig.keywords) {
+          groupKeywords = groupConfig.keywords
+        }
+      }
+
+      // 合并两个关键词列表
+      const allKeywords = [...new Set([...keywords, ...groupKeywords])]
+
+      // 如果没有关键词，直接返回
+      if (allKeywords.length === 0) {
+        return '未配置任何关键词，无法进行测试。'
+      }
+
+      let matchedKeywords = []
+
+      // 测试每个关键词
+      for (const keyword of allKeywords) {
+        if (!keyword) continue
+
+        // 尝试直接字符串匹配
+        const matchedByString = text.includes(keyword)
+
+        // 尝试忽略大小写的字符串匹配
+        const matchedByLowerCase = text.toLowerCase().includes(keyword.toLowerCase())
+
+        // 尝试正则匹配
+        let matchedByRegex = false
+        if (config.useRegex) {
+          try {
+            const flags = config.regexFlags || 'i'
+            const regex = new RegExp(keyword, flags)
+            matchedByRegex = regex.test(text)
+          } catch (error) {
+            logger.warn(`正则表达式错误: ${error.message}`)
+          }
+        }
+
+        // 任一匹配方式成功则认为匹配成功
+        if (matchedByRegex || matchedByString || matchedByLowerCase) {
+          matchedKeywords.push({
+            keyword,
+            matchedByString,
+            matchedByLowerCase,
+            matchedByRegex
+          })
+        }
+      }
+
+      if (matchedKeywords.length > 0) {
+        let result = `测试文本 "${text}" 匹配到了 ${matchedKeywords.length} 个关键词:\n\n`
+
+        matchedKeywords.forEach((match, index) => {
+          result += `${index + 1}. "${match.keyword}" 匹配方式:`
+
+          const methods = []
+          if (match.matchedByString) methods.push('直接字符串匹配')
+          if (match.matchedByLowerCase) methods.push('忽略大小写匹配')
+          if (match.matchedByRegex) methods.push('正则表达式匹配')
+
+          result += ` ${methods.join(', ')}\n`
+        })
+
+        return result
+      } else {
+        return `测试文本 "${text}" 未匹配到任何关键词。\n当前共有 ${allKeywords.length} 个关键词，正则模式: ${config.useRegex ? '已启用' : '未启用'}`
+      }
     })
 
   // 注册消息处理器
