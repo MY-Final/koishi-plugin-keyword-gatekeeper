@@ -3,6 +3,7 @@ import { Config } from '../types'
 import { KeywordDatabase } from '../database'
 import { WarningManager } from './warning-manager'
 import { KeywordHandler } from './keyword-handler'
+import { UrlHandler } from './url-handler'
 
 /**
  * 辅助函数：获取消息内容
@@ -126,6 +127,9 @@ export function registerMessageHandler(ctx: Context, config: Config, database: K
   // 创建关键词处理器
   const keywordHandler = new KeywordHandler(ctx)
 
+  // 创建URL处理器
+  const urlHandler = new UrlHandler(ctx)
+
   // 输出调试信息
   logger.debug('正在注册关键词检测中间件...')
 
@@ -246,47 +250,17 @@ export function registerMessageHandler(ctx: Context, config: Config, database: K
 
           // 如果启用了URL检测且消息尚未被处理
           if (config.detectUrls && !messageHandled) {
-            // 直接调用URL检测处理
-            const matchedUrl = keywordHandler.checkUrls(content, groupConfig.urlWhitelist || config.urlWhitelist)
-            if (matchedUrl) {
+            // 使用专业的UrlHandler进行URL检测处理
+            const urlDetected = await urlHandler.handleUrlDetection(meta, {
+              ...config,
+              urlWhitelist: [...(config.urlWhitelist || []), ...(groupConfig.urlWhitelist || [])],
+              urlCustomMessage: groupConfig.urlCustomMessage || config.urlCustomMessage
+            });
+
+            if (urlDetected) {
               if (config.enableDebugMode) {
-                logger.debug(`[${meta.guildId}] 检测到非白名单URL: ${matchedUrl}`)
+                logger.debug(`[${meta.guildId}] URL检测触发，已处理消息`)
               }
-
-              // 尝试撤回消息
-              if (config.urlAction === 'recall' || config.urlAction === 'both') {
-                await keywordHandler.recallMessage(meta)
-              }
-
-              // 如果配置了禁言，执行禁言
-              if (config.urlAction === 'mute' || config.urlAction === 'both') {
-                await keywordHandler.muteUser(meta, config.urlMuteDuration || 300)
-              }
-
-              // 更新警告记录
-              await warningManager.updateUserPunishmentRecord(
-                meta.userId,
-                config,
-                meta.guildId,
-                {
-                  keyword: matchedUrl,
-                  type: 'url',
-                  action: (config.urlAction === 'mute' || config.urlAction === 'both') ? 'mute' : 'warn',
-                  messageContent: content
-                }
-              )
-
-              // 发送提示消息
-              if (groupConfig.urlCustomMessage || config.urlCustomMessage) {
-                const message = (groupConfig.urlCustomMessage || config.urlCustomMessage)
-                  .replace('{user}', '')
-                  .replace('{keyword}', matchedUrl)
-                  .replace('{action}', (config.urlAction === 'mute' || config.urlAction === 'both') ? '禁言' : '警告')
-                  .replace('{count}', '1')
-
-                await keywordHandler.sendNotice(meta, message)
-              }
-
               messageHandled = true;
             }
           }
@@ -330,57 +304,25 @@ export function registerMessageHandler(ctx: Context, config: Config, database: K
           }
         }
       }
-
-      // 检测全局URL（如果消息尚未被处理）
-      if (config.detectUrls && !messageHandled) {
-        const matchedUrl = keywordHandler.checkUrls(content, config.urlWhitelist)
-        if (matchedUrl) {
-          logger.debug(`检测到非白名单URL: ${matchedUrl}`)
-
-          // 尝试撤回消息
-          if (config.urlAction === 'recall' || config.urlAction === 'both') {
-            await keywordHandler.recallMessage(meta)
+      // 全局URL检测（如果消息未被处理且不在群聊中或群聊未启用特定配置）
+      else if (config.detectUrls && !messageHandled) {
+        // 使用专业的UrlHandler进行URL检测
+        const urlDetected = await urlHandler.handleUrlDetection(meta, config);
+        if (urlDetected) {
+          if (config.enableDebugMode) {
+            logger.debug(`全局URL检测触发，已处理消息`)
           }
-
-          // 如果配置了禁言，执行禁言
-          if (config.urlAction === 'mute' || config.urlAction === 'both') {
-            await keywordHandler.muteUser(meta, config.urlMuteDuration || 300)
-          }
-
-          // 更新警告记录
-          await warningManager.updateUserPunishmentRecord(
-            meta.userId,
-            config,
-            meta.guildId,
-            {
-              keyword: matchedUrl,
-              type: 'url',
-              action: (config.urlAction === 'mute' || config.urlAction === 'both') ? 'mute' : 'warn',
-              messageContent: content
-            }
-          )
-
-          // 发送提示消息
-          if (config.urlCustomMessage) {
-            const message = config.urlCustomMessage
-              .replace('{user}', '')
-              .replace('{keyword}', matchedUrl)
-              .replace('{action}', (config.urlAction === 'mute' || config.urlAction === 'both') ? '禁言' : '警告')
-              .replace('{count}', '1')
-
-            await keywordHandler.sendNotice(meta, message)
-          }
-
           messageHandled = true;
         }
       }
+
+      return next()
     } catch (error) {
-      logger.error(`处理异常: ${error.message}`)
+      logger.error(`消息处理出错: ${error.message}`)
       if (error.stack) {
         logger.debug(`错误堆栈: ${error.stack}`)
       }
+      return next()
     }
-
-    return next()
-  }, true)  // 使用true表示高优先级
+  }, true) // 使用true表示高优先级
 }

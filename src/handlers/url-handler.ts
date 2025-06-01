@@ -46,35 +46,94 @@ export class UrlHandler extends MessageHandler {
       return null
     }
 
+    // 检查是否包含CQ码或其他格式的图片标识
+    if (message.includes('[CQ:image') ||
+        message.includes('[CQ:face') ||
+        message.includes('[mirai:image') ||
+        message.includes('[图片]') ||
+        message.includes('[表情]')) {
+      this.ctx.logger.debug(`检测到消息中包含图片/表情标记，对图片URL跳过检测`)
+
+      // 提取纯文本部分，只检查非图片的内容
+      // 将CQ码部分替换为空字符串
+      let cleanedMessage = message
+        .replace(/\[CQ:[^\]]+\]/g, '')
+        .replace(/\[mirai:[^\]]+\]/g, '')
+        .replace(/\[图片\]/g, '')
+        .replace(/\[表情\]/g, '')
+
+      // 如果清理后的消息为空或只包含空白字符，则跳过检测
+      if (!cleanedMessage.trim()) {
+        return null
+      }
+
+      // 否则，使用清理后的消息继续检测
+      message = cleanedMessage
+    }
+
     const urls = message.match(this.URL_REGEX)
     if (!urls || urls.length === 0) return null
 
+    // 常见的图片和媒体域名白名单
+    const mediaWhitelist = [
+      'qpic.cn', 'gtimg.cn', 'qlogo.cn', 'qq.com',
+      'gchat.qpic.cn', 'c2cpicdw.qpic.cn', 'p.qpic.cn',
+      'mmbiz.qpic.cn', 'wx.qlogo.cn', 'thirdqq.qlogo.cn',
+      'q1.qlogo.cn', 'q2.qlogo.cn', 'q3.qlogo.cn', 'q4.qlogo.cn',
+      'q5.qlogo.cn', 'q6.qlogo.cn', 'q7.qlogo.cn', 'q8.qlogo.cn',
+      'pic.qq.com', 'emoji.qq.com', 'qmimg.qq.com',
+      'img.alicdn.com', 'img.aliyun.com', 'aliyuncs.com',
+      'baidu.com', 'bdstatic.com', 'sinaimg.cn',
+      '126.net', '163.com', 'netease.com',
+      'qiniucdn.com', 'qnimg.cn', 'qiniup.com',
+      'myqcloud.com', 'cos.ap-', 'tencent-cloud.cn',
+      'hdslb.com', 'bilivideo.com', 'bili.com', 'bilibili.com',
+      'douyin.com', 'douyinpic.com', 'douyincdn.com',
+      'xiaohongshu.com', 'xhscdn.com', 'xhslink.com'
+    ]
+
     // 检查是否在白名单中
     for (const url of urls) {
-      // 排除QQ表情包、图片和其他媒体资源URL
-      // 1. QQ表情包和图片常见标识
+      // 排除QQ表情包、图片和其他媒体资源URL的各种情况
+
+      // 1. QQ相关图片资源标识（多种形式）
       if (url.includes('QFace') ||
           url.includes('/gchatpic_new/') ||
           url.includes('/c2c-') ||
           url.includes('/emoji/') ||
-          url.includes('/face/')) {
+          url.includes('/face/') ||
+          url.includes('/faceemotion/') ||
+          url.includes('/chatimg/') ||
+          url.includes('/offpic_new/') ||
+          url.includes('/mmbiz_') ||
+          url.includes('/logo/')) {
         this.ctx.logger.debug(`跳过QQ表情包/图片URL: ${url}`)
         continue
       }
 
-      // 2. 常见媒体文件扩展名
-      const mediaExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.mp4', '.mp3', '.wav', '.webm', '.ogg'];
-      if (mediaExtensions.some(ext => url.toLowerCase().endsWith(ext))) {
+      // 2. 检查常见的图片和媒体文件扩展名
+      const mediaExtensions = [
+        '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
+        '.mp4', '.mp3', '.wav', '.webm', '.ogg', '.svg',
+        '.tif', '.tiff', '.ico', '.avif', '.heic', '.heif',
+        '.mov', '.avi', '.mkv', '.flv', '.rmvb', '.wmv'
+      ];
+
+      if (mediaExtensions.some(ext => url.toLowerCase().includes(ext))) {
         this.ctx.logger.debug(`跳过媒体文件URL: ${url}`)
         continue
       }
 
-      // 3. 特殊判断资源链接
-      if (url.includes('/offical/') ||
-          url.includes('/image/') ||
-          url.includes('/sticker/') ||
-          url.includes('/resource/') ||
-          url.includes('/download?')) {
+      // 3. 特殊判断资源链接关键词
+      const resourceKeywords = [
+        '/offical/', '/official/', '/image/', '/sticker/',
+        '/resource/', '/download', '/thumbnail/', '/profile/',
+        '/avatar/', '/qrcode/', '/icon/', '/photo/',
+        '/share/', '/static/', '/assets/', '/media/',
+        '/uploads/', '/emojis/', '/gif/', '/cdn/'
+      ];
+
+      if (resourceKeywords.some(keyword => url.includes(keyword))) {
         this.ctx.logger.debug(`跳过资源文件URL: ${url}`)
         continue
       }
@@ -89,18 +148,35 @@ export class UrlHandler extends MessageHandler {
         const urlObj = new URL(urlWithProtocol)
         const hostname = urlObj.hostname
 
-        // 4. 特殊处理QQ多媒体链接
+        // 4. 检查是否是媒体白名单域名
+        if (mediaWhitelist.some(domain => hostname.includes(domain))) {
+          this.ctx.logger.debug(`跳过媒体白名单域名: ${hostname}`)
+          continue
+        }
+
+        // 5. 特殊处理其他多媒体链接通用特征
         if (hostname.includes('multimedia') ||
             hostname.includes('media') ||
             hostname.includes('img') ||
+            hostname.includes('image') ||
             hostname.includes('pic') ||
+            hostname.includes('photo') ||
             hostname.includes('static') ||
+            hostname.includes('assets') ||
+            hostname.includes('resource') ||
             hostname.includes('cdn')) {
           this.ctx.logger.debug(`跳过多媒体域名URL: ${url} (${hostname})`)
           continue
         }
 
-        // 检查域名是否在白名单中
+        // 6. 检查是否包含在URL参数中的图片标记
+        const imageParamKeywords = ['image=', 'img=', 'pic=', 'photo=', 'avatar=', 'icon='];
+        if (imageParamKeywords.some(param => urlObj.search.includes(param))) {
+          this.ctx.logger.debug(`跳过包含图片参数的URL: ${url}`)
+          continue
+        }
+
+        // 检查域名是否在用户配置的白名单中
         const isWhitelisted = whitelist.some(domain =>
           hostname === domain || hostname.endsWith(`.${domain}`))
 
@@ -109,7 +185,10 @@ export class UrlHandler extends MessageHandler {
           const commonSafeDomains = [
             'qq.com', 'gtimg.com', 'qpic.cn', 'qlogo.cn',
             'nt.qq.com.cn', 'qzone.qq.com', 'qqmail.com',
-            'tencent.com', 'myqcloud.com'
+            'tencent.com', 'myqcloud.com', 'weixin.qq.com',
+            'wx.qq.com', 'microsoft.com', 'msn.com', 'bing.com',
+            'google.com', 'baidu.com', 'bilibili.com', 'youku.com',
+            'iqiyi.com', 'douyin.com', 'weibo.com', 'zhihu.com'
           ];
           if (commonSafeDomains.some(domain => hostname.endsWith(`.${domain}`) || hostname === domain)) {
             this.ctx.logger.debug(`跳过安全域名URL: ${url} (${hostname})`)
@@ -192,7 +271,7 @@ export class UrlHandler extends MessageHandler {
 
     // 记录处理前的状态
     const beforeRecord = await this.warningManager.queryUserWarningRecord(meta.userId, config, meta.guildId)
-    this.ctx.logger.info(`[${meta.guildId}] 处理前用户 ${meta.userId} 的警告记录: 次数=${beforeRecord.count}`)
+    this.ctx.logger.info(`[${meta.guildId}] URL处罚: 处理前用户 ${meta.userId} 的警告记录: 次数=${beforeRecord.count}`)
 
     // 更新并获取用户的违规次数
     const violationCount = await this.warningManager.updateUserPunishmentRecord(
@@ -206,48 +285,38 @@ export class UrlHandler extends MessageHandler {
         messageContent: this.getMessageContent(meta)
       }
     )
-    this.ctx.logger.info(`[${meta.guildId}] 已更新用户 ${meta.userId} 的警告记录: 次数=${violationCount}`)
+    this.ctx.logger.info(`[${meta.guildId}] URL处罚: 已更新用户 ${meta.userId} 的警告记录: 次数=${violationCount}`)
 
     // 记录处理后的状态
     const afterRecord = await this.warningManager.queryUserWarningRecord(meta.userId, config, meta.guildId)
-    this.ctx.logger.info(`[${meta.guildId}] 处理后用户 ${meta.userId} 的警告记录: 次数=${afterRecord.count}`)
+    this.ctx.logger.info(`[${meta.guildId}] URL处罚: 处理后用户 ${meta.userId} 的警告记录: 次数=${afterRecord.count}`)
 
     if (beforeRecord.count === afterRecord.count && violationCount !== afterRecord.count) {
-      this.ctx.logger.warn(`[${meta.guildId}] 警告记录更新异常: 预期次数=${violationCount}, 实际次数=${afterRecord.count}`)
+      this.ctx.logger.warn(`[${meta.guildId}] URL处罚: 警告记录更新异常: 预期次数=${violationCount}, 实际次数=${afterRecord.count}`)
     }
 
     // 撤回消息（所有违规等级都撤回）
     if (config.urlAction === 'recall' || config.urlAction === 'both') {
       await this.recallMessage(meta)
+      this.ctx.logger.info(`[${meta.guildId}] URL处罚: 已撤回用户 ${meta.userId} 发送的含URL消息`)
     }
 
     // 如果没有权限，记录日志但不执行处罚操作
     if (!hasBotPermission) {
-      this.ctx.logger.warn(`[${meta.guildId}] 机器人没有管理权限，无法执行处罚操作`)
+      this.ctx.logger.warn(`[${meta.guildId}] URL处罚: 机器人没有管理权限，无法执行处罚操作`)
       return true
     }
 
     let actionTaken = false
     let message = ''
+    let actionType: 'warn' | 'mute' | 'kick' = 'warn' // 默认为警告
 
     // 根据违规次数执行不同的处罚
     if (violationCount === 1) {
       // 第一次：警告
       message = `您发送了非白名单网址"${matchedUrl}"，这是第一次警告。`
       actionTaken = true
-
-      // 更新处罚类型为警告
-      await this.warningManager.updateUserPunishmentRecord(
-        meta.userId,
-        config,
-        meta.guildId,
-        {
-          keyword: matchedUrl,
-          type: 'url',
-          action: 'warn',
-          messageContent: this.getMessageContent(meta)
-        }
-      )
+      this.ctx.logger.info(`[${meta.guildId}] URL处罚: 用户 ${meta.userId} 第1次违规，执行警告`)
     }
     else if (violationCount >= 2) {
       // 计算禁言时长，随违规次数递增
@@ -256,15 +325,18 @@ export class UrlHandler extends MessageHandler {
       if (violationCount === 2) {
         // 第二次违规：使用配置的第二次违规禁言时长
         muteDuration = config.secondViolationMuteDuration;
-        this.ctx.logger.info(`[${meta.guildId}] 第二次违规，禁言时长: ${muteDuration}秒`);
+        this.ctx.logger.info(`[${meta.guildId}] URL处罚: 第二次违规，禁言时长: ${muteDuration}秒`);
       }
       else if (violationCount >= config.maxViolationCount) {
         // 达到最大违规次数
         if (config.kickOnMaxViolation) {
+          this.ctx.logger.info(`[${meta.guildId}] URL处罚: 用户 ${meta.userId} 达到最大违规次数 ${violationCount}/${config.maxViolationCount}，尝试执行踢出`)
           const kicked = await this.kickUser(meta)
           if (kicked) {
             message = `用户 ${meta.username || meta.userId} 因多次发送非白名单网址"${matchedUrl}"已被踢出群聊。`
             actionTaken = true
+            actionType = 'kick'
+            this.ctx.logger.info(`[${meta.guildId}] URL处罚: 用户 ${meta.userId} 第${violationCount}次违规，已踢出群聊`)
 
             // 更新处罚类型为踢出
             await this.warningManager.updateUserPunishmentRecord(
@@ -278,20 +350,23 @@ export class UrlHandler extends MessageHandler {
                 messageContent: this.getMessageContent(meta)
               }
             )
+
             return actionTaken; // 踢出后不需要继续处理
           }
           // 如果踢出失败，使用长时间禁言
+          this.ctx.logger.warn(`[${meta.guildId}] URL处罚: 踢出用户 ${meta.userId} 失败，将使用长时间禁言代替`)
           muteDuration = 3600; // 1小时
         } else {
           // 配置为不踢出，使用长时间禁言
           muteDuration = 3600; // 1小时
+          this.ctx.logger.info(`[${meta.guildId}] URL处罚: 用户 ${meta.userId} 达到最大违规次数 ${violationCount}/${config.maxViolationCount}，执行长时间禁言(${muteDuration}秒)`)
         }
       }
       else {
         // 中间违规次数：禁言时间按倍数递增
         // 使用第二次违规时长的倍数：(违规次数-1)倍
         muteDuration = config.secondViolationMuteDuration * (violationCount - 1);
-        this.ctx.logger.info(`[${meta.guildId}] 第${violationCount}次违规，禁言时长: ${muteDuration}秒 (${config.secondViolationMuteDuration} × ${violationCount-1})`);
+        this.ctx.logger.info(`[${meta.guildId}] URL处罚: 第${violationCount}次违规，禁言时长: ${muteDuration}秒 (${config.secondViolationMuteDuration} × ${violationCount-1})`);
       }
 
       // 执行禁言
@@ -301,27 +376,33 @@ export class UrlHandler extends MessageHandler {
           const durationText = this.formatDuration(muteDuration)
           message = `您发送了非白名单网址"${matchedUrl}"，这是第${violationCount}次违规，已禁言${durationText}。`
           actionTaken = true
-
-          // 更新处罚类型为禁言
-          await this.warningManager.updateUserPunishmentRecord(
-            meta.userId,
-            config,
-            meta.guildId,
-            {
-              keyword: matchedUrl,
-              type: 'url',
-              action: 'mute',
-              messageContent: this.getMessageContent(meta)
-            }
-          )
+          actionType = 'mute'
+          this.ctx.logger.info(`[${meta.guildId}] URL处罚: 用户 ${meta.userId} 第${violationCount}次违规，已禁言${durationText}`)
+        } else {
+          this.ctx.logger.warn(`[${meta.guildId}] URL处罚: 禁言用户 ${meta.userId} 失败`)
         }
       }
+    }
+
+    // 更新处罚类型
+    if (actionTaken && actionType !== 'warn') {
+      await this.warningManager.updateUserPunishmentRecord(
+        meta.userId,
+        config,
+        meta.guildId,
+        {
+          keyword: matchedUrl,
+          type: 'url',
+          action: actionType,
+          messageContent: this.getMessageContent(meta)
+        }
+      )
     }
 
     // 发送处罚通知
     if (actionTaken && message) {
       await this.sendNotice(meta, message)
-      this.ctx.logger.info(`[${meta.guildId}] 用户 ${meta.userId} 因发送非白名单网址 "${matchedUrl}" 第${violationCount}次违规，已执行自动处罚`)
+      this.ctx.logger.info(`[${meta.guildId}] URL处罚: 用户 ${meta.userId} 因发送非白名单网址 "${matchedUrl}" 第${violationCount}次违规，已执行自动处罚并发送通知`)
     }
 
     return actionTaken

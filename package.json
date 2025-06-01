@@ -9,15 +9,15 @@
     "src"
   ],
   "license": "MIT",
-  "author": "Niko <niko@niko233.com>",
+  "author": "Final",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/initialencounter/koishi-plugin-keyword-gatekeeper.git"
+    "url": "https://github.com/MY-Final/koishi-plugin-keyword-gatekeeper.git"
   },
   "bugs": {
-    "url": "https://github.com/initialencounter/koishi-plugin-keyword-gatekeeper/issues"
+    "url": "https://github.com/MY-Final/koishi-plugin-keyword-gatekeeper/issues"
   },
-  "homepage": "https://github.com/initialencounter/koishi-plugin-keyword-gatekeeper#readme",
+  "homepage": "https://github.com/MY-Final/koishi-plugin-keyword-gatekeeper/blob/master/readme.md",
   "keywords": [
     "chatbot",
     "koishi",
@@ -53,9 +53,6 @@
     "build": "tsc",
     "lint": "eslint --ext .ts src"
   },
-  "contributors": [
-    "Niko <niko@niko233.com>"
-  ],
   "engines": {
     "node": ">=16.0.0"
   },
@@ -74,7 +71,7 @@
     "0.0.8": "重构命令注册机制，修复命令冲突问题，优化命令结构",
     "0.0.9": "修复了全局关键词检测和撤回功能，减少了不必要的日志输出，提高了性能",
     "0.1.0": "修复了全局关键词和群组关键词检测冲突的问题，现在两者会同时检测，确保所有违规消息都能被正确处理",
-    "0.1.1": "添加了查看群组已导入预设包的命令和从群组中卸载预设包的功能，新增kw preset imported和kw preset unimport命令",
-    "0.1.2": "优化日志输出系统，将调试模式设置为默认关闭状态，优化日志级别控制，提高性能并减少冗余信息"
+    "0.1.1": "添加了查看群组已导入预设包的命令和从群组中卸载预设包的功能，新增kw preset imported和kw preset unimport命令，优化日志输出系统，将调试模式设置为默认关闭状态，优化日志级别控制，提高性能并减少冗余信息",
+    "0.1.2": "添加了管理员检查功能，跳过对群管理员和群主的关键词检测；优化日志输出系统，减少不必要的日志输出；修复了自动处罚机制，确保升级处罚正常工作；优化URL检测功能，增加对QQ表情包和图片链接的识别，避免误判；增强URL白名单系统，自动排除常见的图片、表情和媒体域名；改进消息预处理，更准确地分离和处理消息中的媒体内容；完善自动处罚机制，确保URL检测与关键词检测共享相同的处罚升级逻辑，实现URL禁言时长随违规次数递增"
   }
 }

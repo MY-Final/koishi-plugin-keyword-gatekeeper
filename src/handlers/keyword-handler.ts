@@ -64,17 +64,63 @@ export class KeywordHandler extends MessageHandler {
 
     if (!urls) return null
 
+    // 常见的图片和表情域名白名单
+    const imageWhitelist = [
+      'qpic.cn',       // QQ图片
+      'gchat.qpic.cn', // QQ群聊图片
+      'c2cpicdw.qpic.cn', // QQ个人图片
+      'p.qpic.cn',     // QQ表情包
+      'pic.qq.com',    // QQ相关图片
+      'mmbiz.qpic.cn', // 微信公众号图片
+      'wx.qlogo.cn',   // 微信头像
+      'thirdqq.qlogo.cn', // QQ头像
+      'q1.qlogo.cn',   // QQ头像
+      'q2.qlogo.cn',   // QQ头像
+      'q3.qlogo.cn',   // QQ头像
+      'q4.qlogo.cn',   // QQ头像
+      'qlogo.cn',      // QQ相关图片
+      'emoji.qq.com',  // QQ表情
+      'img.alicdn.com', // 阿里云图片
+      'img.aliyun.com', // 阿里云图片
+      'img.alicdn.com', // 阿里云图片
+      'aliyuncs.com',  // 阿里云服务
+      'baidu.com',     // 百度相关
+      'bdstatic.com',  // 百度静态资源
+      '126.net',       // 网易相关
+      '163.com',       // 网易相关
+      'qiniucdn.com',  // 七牛云
+      'qnimg.cn',      // 七牛云
+      'qiniup.com',    // 七牛云
+      'myqcloud.com',  // 腾讯云
+      'cos.ap-',       // 腾讯云COS
+      'tencent-cloud.cn' // 腾讯云
+    ]
+
     // 检查是否在白名单中
     for (const url of urls) {
       // 提取域名
       const domain = url.replace(/^https?:\/\//, '').split('/')[0].split(':')[0]
 
-      // 检查是否为QQ多媒体链接
-      if (domain.includes('qpic.cn')) {
+      // 检查是否为QQ的CQ码图片
+      if (url.includes('[CQ:image') || url.includes('[CQ:face')) {
         continue
       }
 
-      // 如果在白名单中，则跳过
+      // 检查是否为图片域名白名单
+      let isImageDomain = false
+      for (const imageDomain of imageWhitelist) {
+        if (domain.includes(imageDomain)) {
+          isImageDomain = true
+          break
+        }
+      }
+
+      // 如果是图片域名，直接跳过
+      if (isImageDomain) {
+        continue
+      }
+
+      // 如果在用户配置的白名单中，则跳过
       let isWhitelisted = false
       for (const whitelistDomain of whitelist) {
         if (domain.includes(whitelistDomain) || domain === whitelistDomain) {
@@ -306,7 +352,7 @@ export class KeywordHandler extends MessageHandler {
 
     // 记录处理前的状态
     const beforeRecord = await this.warningManager.queryUserWarningRecord(meta.userId, config, meta.guildId)
-    this.ctx.logger.info(`[${meta.guildId}] 处理前用户 ${meta.userId} 的警告记录: 次数=${beforeRecord.count}`)
+    this.ctx.logger.info(`[${meta.guildId}] 关键词处罚: 处理前用户 ${meta.userId} 的警告记录: 次数=${beforeRecord.count}`)
 
     // 更新并获取用户的违规次数
     const violationCount = await this.warningManager.updateUserPunishmentRecord(
@@ -320,116 +366,121 @@ export class KeywordHandler extends MessageHandler {
         messageContent: this.getMessageContent(meta)
       }
     )
-    this.ctx.logger.info(`[${meta.guildId}] 已更新用户 ${meta.userId} 的警告记录: 次数=${violationCount}`)
+    this.ctx.logger.info(`[${meta.guildId}] 关键词处罚: 已更新用户 ${meta.userId} 的警告记录: 次数=${violationCount}`)
 
     // 记录处理后的状态
     const afterRecord = await this.warningManager.queryUserWarningRecord(meta.userId, config, meta.guildId)
-    this.ctx.logger.info(`[${meta.guildId}] 处理后用户 ${meta.userId} 的警告记录: 次数=${afterRecord.count}`)
+    this.ctx.logger.info(`[${meta.guildId}] 关键词处罚: 处理后用户 ${meta.userId} 的警告记录: 次数=${afterRecord.count}`)
 
     if (beforeRecord.count === afterRecord.count && violationCount !== afterRecord.count) {
-      this.ctx.logger.warn(`[${meta.guildId}] 警告记录更新异常: 预期次数=${violationCount}, 实际次数=${afterRecord.count}`)
+      this.ctx.logger.warn(`[${meta.guildId}] 关键词处罚: 警告记录更新异常: 预期次数=${violationCount}, 实际次数=${afterRecord.count}`)
     }
 
     // 撤回消息已在外层handleKeywordDetection中处理，此处不再重复
+    if (config.recall) {
+      this.ctx.logger.info(`[${meta.guildId}] 关键词处罚: 已撤回用户 ${meta.userId} 的违规消息`)
+    }
+
+    // 如果没有权限，记录日志但不执行处罚操作
+    if (!hasBotPermission) {
+      this.ctx.logger.warn(`[${meta.guildId}] 关键词处罚: 机器人没有管理权限，无法执行处罚操作`)
+      return true
+    }
 
     let actionTaken = false
     let message = ''
+    let actionType: 'warn' | 'mute' | 'kick' = 'warn' // 默认为警告
 
-    // 根据违规次数执行不同的处罚，只有在有权限时才执行
-    if (hasBotPermission) {
-      if (violationCount === 1) {
-        // 第一次：警告
-        message = `您触发了关键词"${matchedKeyword}"，这是第一次警告。`
-        actionTaken = true
+    // 根据违规次数执行不同的处罚
+    if (violationCount === 1) {
+      // 第一次：警告
+      message = `您触发了关键词"${matchedKeyword}"，这是第一次警告。`
+      actionTaken = true
+      this.ctx.logger.info(`[${meta.guildId}] 关键词处罚: 用户 ${meta.userId} 第1次违规，执行警告`)
+    }
+    else if (violationCount >= 2) {
+      // 计算禁言时长，随违规次数递增
+      let muteDuration = 0;
 
-        // 更新处罚类型为警告
-        await this.updatePunishmentType(
-          meta.userId,
-          meta.guildId,
-          {
-            keyword: matchedKeyword,
-            type: 'keyword',
-            action: 'warn',
-            messageContent: this.getMessageContent(meta)
-          }
-        )
+      if (violationCount === 2) {
+        // 第二次违规：使用配置的第二次违规禁言时长
+        muteDuration = config.secondViolationMuteDuration;
+        this.ctx.logger.info(`[${meta.guildId}] 关键词处罚: 第二次违规，禁言时长: ${muteDuration}秒`);
       }
-      else if (violationCount >= 2) {
-        // 计算禁言时长，随违规次数递增
-        let muteDuration = 0;
-
-        if (violationCount === 2) {
-          // 第二次违规：使用配置的第二次违规禁言时长
-          muteDuration = config.secondViolationMuteDuration;
-          this.ctx.logger.info(`[${meta.guildId}] 第二次违规，禁言时长: ${muteDuration}秒`);
-        }
-        else if (violationCount >= config.maxViolationCount) {
-          // 达到最大违规次数
-          if (config.kickOnMaxViolation) {
-            const kicked = await this.kickUser(meta)
-            if (kicked) {
-              message = `用户 ${meta.username || meta.userId} 因多次触发关键词"${matchedKeyword}"已被踢出群聊。`
-              actionTaken = true
-
-              // 更新处罚类型为踢出
-              await this.updatePunishmentType(
-                meta.userId,
-                meta.guildId,
-                {
-                  keyword: matchedKeyword,
-                  type: 'keyword',
-                  action: 'kick',
-                  messageContent: this.getMessageContent(meta)
-                }
-              )
-              return actionTaken; // 踢出后不需要继续处理
-            }
-            // 如果踢出失败，使用长时间禁言
-            muteDuration = 3600; // 1小时
-          } else {
-            // 配置为不踢出，使用长时间禁言
-            muteDuration = 3600; // 1小时
-          }
-        }
-        else {
-          // 中间违规次数：禁言时间按倍数递增
-          // 使用第二次违规时长的倍数：(违规次数-1)倍
-          muteDuration = config.secondViolationMuteDuration * (violationCount - 1);
-          this.ctx.logger.info(`[${meta.guildId}] 第${violationCount}次违规，禁言时长: ${muteDuration}秒 (${config.secondViolationMuteDuration} × ${violationCount-1})`);
-        }
-
-        // 执行禁言
-        if (muteDuration > 0) {
-          const muted = await this.muteUser(meta, muteDuration)
-          if (muted) {
-            const durationText = this.formatDuration(muteDuration)
-            message = `您触发了关键词"${matchedKeyword}"，这是第${violationCount}次违规，已禁言${durationText}。`
+      else if (violationCount >= config.maxViolationCount) {
+        // 达到最大违规次数
+        if (config.kickOnMaxViolation) {
+          this.ctx.logger.info(`[${meta.guildId}] 关键词处罚: 用户 ${meta.userId} 达到最大违规次数 ${violationCount}/${config.maxViolationCount}，尝试执行踢出`)
+          const kicked = await this.kickUser(meta)
+          if (kicked) {
+            message = `用户 ${meta.username || meta.userId} 因多次触发关键词"${matchedKeyword}"已被踢出群聊。`
             actionTaken = true
+            actionType = 'kick'
+            this.ctx.logger.info(`[${meta.guildId}] 关键词处罚: 用户 ${meta.userId} 第${violationCount}次违规，已踢出群聊`)
 
-            // 更新处罚类型为禁言
+            // 更新处罚类型为踢出
             await this.updatePunishmentType(
               meta.userId,
               meta.guildId,
               {
                 keyword: matchedKeyword,
                 type: 'keyword',
-                action: 'mute',
+                action: 'kick',
                 messageContent: this.getMessageContent(meta)
               }
             )
+
+            return actionTaken; // 踢出后不需要继续处理
           }
+          // 如果踢出失败，使用长时间禁言
+          this.ctx.logger.warn(`[${meta.guildId}] 关键词处罚: 踢出用户 ${meta.userId} 失败，将使用长时间禁言代替`)
+          muteDuration = 3600; // 1小时
+        } else {
+          // 配置为不踢出，使用长时间禁言
+          muteDuration = 3600; // 1小时
+          this.ctx.logger.info(`[${meta.guildId}] 关键词处罚: 用户 ${meta.userId} 达到最大违规次数 ${violationCount}/${config.maxViolationCount}，执行长时间禁言(${muteDuration}秒)`)
         }
       }
-    } else {
-      // 如果没有权限，记录日志但不发送消息
-      this.ctx.logger.warn(`[${meta.guildId}] 机器人没有管理权限，无法执行处罚操作`)
-      return true
+      else {
+        // 中间违规次数：禁言时间按倍数递增
+        // 使用第二次违规时长的倍数：(违规次数-1)倍
+        muteDuration = config.secondViolationMuteDuration * (violationCount - 1);
+        this.ctx.logger.info(`[${meta.guildId}] 关键词处罚: 第${violationCount}次违规，禁言时长: ${muteDuration}秒 (${config.secondViolationMuteDuration} × ${violationCount-1})`);
+      }
+
+      // 执行禁言
+      if (muteDuration > 0) {
+        const muted = await this.muteUser(meta, muteDuration)
+        if (muted) {
+          const durationText = this.formatDuration(muteDuration)
+          message = `您触发了关键词"${matchedKeyword}"，这是第${violationCount}次违规，已禁言${durationText}。`
+          actionTaken = true
+          actionType = 'mute'
+          this.ctx.logger.info(`[${meta.guildId}] 关键词处罚: 用户 ${meta.userId} 第${violationCount}次违规，已禁言${durationText}`)
+        } else {
+          this.ctx.logger.warn(`[${meta.guildId}] 关键词处罚: 禁言用户 ${meta.userId} 失败`)
+        }
+      }
+    }
+
+    // 更新处罚类型
+    if (actionTaken && actionType !== 'warn') {
+      await this.updatePunishmentType(
+        meta.userId,
+        meta.guildId,
+        {
+          keyword: matchedKeyword,
+          type: 'keyword',
+          action: actionType,
+          messageContent: this.getMessageContent(meta)
+        }
+      )
     }
 
     // 发送处罚通知
     if (actionTaken && message) {
       await this.sendNotice(meta, message)
-      this.ctx.logger.info(`[${meta.guildId}] 用户 ${meta.userId} 因触发关键词 "${matchedKeyword}" 第${violationCount}次违规，已执行自动处罚`)
+      this.ctx.logger.info(`[${meta.guildId}] 关键词处罚: 用户 ${meta.userId} 因触发关键词 "${matchedKeyword}" 第${violationCount}次违规，已执行自动处罚并发送通知`)
     }
 
     return actionTaken
