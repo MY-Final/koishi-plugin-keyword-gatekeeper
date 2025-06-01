@@ -60,6 +60,59 @@ function getMessageContent(meta: any): string {
 }
 
 /**
+ * 检查用户是否为管理员或群主
+ * @param ctx Koishi上下文
+ * @param meta 消息元数据
+ * @returns 是否为管理员或群主
+ */
+async function isAdminOrOwner(ctx, meta): Promise<boolean> {
+  try {
+    // 如果没有群组ID，无法判断是否为管理员
+    if (!meta.guildId) return false
+
+    // 检查是否为群管理员或群主
+    if (meta.platform === 'onebot' || meta.platform === 'qq') {
+      // 尝试获取群成员信息
+      if (meta.onebot) {
+        try {
+          const memberInfo = await meta.onebot.getGroupMemberInfo(meta.guildId, meta.userId)
+          // role: owner-群主, admin-管理员, member-普通成员
+          if (memberInfo && (memberInfo.role === 'owner' || memberInfo.role === 'admin')) {
+            return true
+          }
+        } catch (e) {
+          ctx.logger.debug(`获取群成员信息失败: ${e.message}`)
+        }
+      } else if (meta.bot && typeof meta.bot.getGuildMember === 'function') {
+        try {
+          const member = await meta.bot.getGuildMember(meta.guildId, meta.userId)
+          if (member && member.roles && member.roles.some(role => ['owner', 'admin', 'administrator'].includes(role.toLowerCase()))) {
+            return true
+          }
+        } catch (e) {
+          ctx.logger.debug(`获取群成员信息失败: ${e.message}`)
+        }
+      }
+    }
+
+    // 检查是否为Koishi管理员
+    try {
+      const user = await ctx.database.getUser(meta.platform, meta.userId)
+      if (user && user.authority > 1) { // authority > 1 为管理员
+        return true
+      }
+    } catch (e) {
+      ctx.logger.debug(`获取用户权限失败: ${e.message}`)
+    }
+
+    return false
+  } catch (error) {
+    ctx.logger.error(`检查管理员权限出错: ${error.message}`)
+    return false
+  }
+}
+
+/**
  * 注册消息处理器
  * 用于检测和处理消息中的关键词和URL
  */
@@ -74,27 +127,27 @@ export function registerMessageHandler(ctx: Context, config: Config, database: K
   const keywordHandler = new KeywordHandler(ctx)
 
   // 输出调试信息
-  logger.info('正在注册关键词检测中间件...')
+  logger.debug('正在注册关键词检测中间件...')
 
   // 检查配置是否存在kun关键词，如果不存在则添加
   if (!config.keywords) {
     config.keywords = [];
   }
 
-  logger.info(`初始关键词列表: ${JSON.stringify(config.keywords)}`);
+  logger.debug(`初始关键词列表: ${JSON.stringify(config.keywords)}`);
 
   // 确保"kun"在关键词列表中
   if (!config.keywords.includes('kun')) {
-    logger.info('未找到关键词"kun"，正在添加到关键词列表');
+    logger.debug('未找到关键词"kun"，正在添加到关键词列表');
     config.keywords.push('kun');
   }
 
   // 如果有配置关键词，打印关键词信息
   if (config.keywords && config.keywords.length > 0) {
-    logger.info(`监测 ${config.keywords.length} 个关键词: ${config.keywords.join(', ')}`)
-    logger.info(`正则匹配模式: ${config.useRegex ? '已启用' : '未启用'}, 正则标志: ${config.regexFlags || 'i'}`)
+    logger.debug(`监测 ${config.keywords.length} 个关键词: ${config.keywords.join(', ')}`)
+    logger.debug(`正则匹配模式: ${config.useRegex ? '已启用' : '未启用'}, 正则标志: ${config.regexFlags || 'i'}`)
   } else {
-    logger.info('未配置全局关键词，将使用群组特定配置或跳过关键词检测')
+    logger.debug('未配置全局关键词，将使用群组特定配置或跳过关键词检测')
   }
 
   // 注册中间件
@@ -103,7 +156,7 @@ export function registerMessageHandler(ctx: Context, config: Config, database: K
       // 获取消息内容
       const content = getMessageContent(meta)
 
-      // 减少日志输出，仅记录基本信息
+      // 减少日志输出，仅当开启调试模式且真正需要的时候才记录信息
       if (config.enableDebugMode) {
         logger.debug(`收到消息: ${JSON.stringify({
           platform: meta.platform,
@@ -127,6 +180,17 @@ export function registerMessageHandler(ctx: Context, config: Config, database: K
         return next()
       }
 
+      // 检查用户是否为管理员或群主，如果设置了跳过管理员检查，且用户是管理员，则跳过检测
+      if (config.skipAdminCheck) {
+        const isAdmin = await isAdminOrOwner(ctx, meta)
+        if (isAdmin) {
+          if (config.enableDebugMode) {
+            logger.debug(`[${meta.guildId}] 用户 ${meta.userId} 是管理员或群主，跳过关键词检测`)
+          }
+          return next()
+        }
+      }
+
       // 检查机器人是否有管理权限
       const hasBotPermission = await keywordHandler.checkBotPermission(meta)
 
@@ -148,7 +212,10 @@ export function registerMessageHandler(ctx: Context, config: Config, database: K
         // 使用KeywordHandler进行关键词检测
         const globalDetected = await keywordHandler.handleKeywordDetection(meta, config)
         if (globalDetected) {
-          logger.info(`全局关键词检测触发，已处理消息`)
+          // 只在真正触发关键词时输出一条简洁的日志
+          if (config.enableDebugMode) {
+            logger.debug(`全局关键词检测触发，已处理消息`)
+          }
           messageHandled = true; // 标记已处理，但继续检测其他规则
         }
       }
@@ -159,7 +226,9 @@ export function registerMessageHandler(ctx: Context, config: Config, database: K
 
         // 如果群组配置存在且已启用
         if (groupConfig && groupConfig.enabled) {
-          logger.debug(`[${meta.guildId}] 使用群组特定配置进行检测`)
+          if (config.enableDebugMode) {
+            logger.debug(`[${meta.guildId}] 使用群组特定配置进行检测`)
+          }
 
           // 使用群组配置进行关键词检测
           const groupDetected = await keywordHandler.handleKeywordDetection(meta, {
@@ -169,16 +238,20 @@ export function registerMessageHandler(ctx: Context, config: Config, database: K
           });
 
           if (groupDetected) {
-            logger.info(`群组关键词检测触发，已处理消息`)
+            if (config.enableDebugMode) {
+              logger.debug(`群组关键词检测触发，已处理消息`)
+            }
             messageHandled = true; // 标记已处理
           }
 
-          // 如果启用了URL检测
+          // 如果启用了URL检测且消息尚未被处理
           if (config.detectUrls && !messageHandled) {
             // 直接调用URL检测处理
             const matchedUrl = keywordHandler.checkUrls(content, groupConfig.urlWhitelist || config.urlWhitelist)
             if (matchedUrl) {
-              logger.info(`[${meta.guildId}] 检测到非白名单URL: ${matchedUrl}`)
+              if (config.enableDebugMode) {
+                logger.debug(`[${meta.guildId}] 检测到非白名单URL: ${matchedUrl}`)
+              }
 
               // 尝试撤回消息
               if (config.urlAction === 'recall' || config.urlAction === 'both') {
@@ -223,7 +296,7 @@ export function registerMessageHandler(ctx: Context, config: Config, database: K
         if (config.enabledGroups && config.enabledGroups.includes(meta.guildId)) {
           // 如果在自动启用列表中但还没有配置，创建一个新的配置
           if (!groupConfig) {
-            logger.info(`[${meta.guildId}] 群组在自动启用列表中，创建新配置`)
+            logger.debug(`[${meta.guildId}] 群组在自动启用列表中，创建新配置`)
 
             // 创建默认配置
             const newConfig = {
@@ -239,7 +312,7 @@ export function registerMessageHandler(ctx: Context, config: Config, database: K
 
             // 如果配置了自动导入预设包
             if (config.autoImportPresets && config.defaultPresets && config.defaultPresets.length > 0) {
-              logger.info(`[${meta.guildId}] 自动导入预设包`)
+              logger.debug(`[${meta.guildId}] 自动导入预设包`)
 
               // 导入每个预设包
               for (const presetName of config.defaultPresets) {
@@ -247,7 +320,7 @@ export function registerMessageHandler(ctx: Context, config: Config, database: K
                 if (preset) {
                   // 合并关键词
                   newConfig.keywords = [...new Set([...newConfig.keywords, ...preset.keywords])]
-                  logger.info(`[${meta.guildId}] 导入预设包 ${presetName}，添加 ${preset.keywords.length} 个关键词`)
+                  logger.debug(`[${meta.guildId}] 导入预设包 ${presetName}，添加 ${preset.keywords.length} 个关键词`)
                 }
               }
 
@@ -262,7 +335,7 @@ export function registerMessageHandler(ctx: Context, config: Config, database: K
       if (config.detectUrls && !messageHandled) {
         const matchedUrl = keywordHandler.checkUrls(content, config.urlWhitelist)
         if (matchedUrl) {
-          logger.info(`检测到非白名单URL: ${matchedUrl}`)
+          logger.debug(`检测到非白名单URL: ${matchedUrl}`)
 
           // 尝试撤回消息
           if (config.urlAction === 'recall' || config.urlAction === 'both') {

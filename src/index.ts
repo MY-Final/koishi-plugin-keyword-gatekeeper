@@ -119,50 +119,52 @@ export function apply(ctx: Context, config: Config) {
   for (const keyword of testKeywords) {
     if (!config.keywords.includes(keyword)) {
       config.keywords.push(keyword)
-      logger.info(`已添加测试关键词: ${keyword}`)
+      logger.debug(`已添加测试关键词: ${keyword}`)
     }
+  }
+
+  // 确保自动处罚机制默认启用
+  if (config.enableAutoPunishment === undefined) {
+    config.enableAutoPunishment = true
+    logger.info('自动处罚机制已默认启用')
   }
 
   // 输出初始配置信息
   logger.info('关键词守门员插件启动中...')
-  logger.info(`插件版本: 2.0.0`)
-  logger.info(`正则模式: ${config.useRegex ? '已启用' : '未启用'}, 正则标志: ${config.regexFlags || 'i'}`)
+  logger.debug(`插件版本: 2.0.0`)
+  logger.debug(`正则模式: ${config.useRegex ? '已启用' : '未启用'}, 正则标志: ${config.regexFlags || 'i'}`)
 
   // 检查关键词配置
   if (config.keywords && config.keywords.length > 0) {
-    logger.info(`全局关键词(${config.keywords.length}个): ${config.keywords.join(', ')}`)
+    logger.debug(`全局关键词(${config.keywords.length}个): ${config.keywords.join(', ')}`)
   } else {
     logger.warn('未配置全局关键词，请确认是否需要添加关键词')
   }
 
   // 检查URL配置
   if (config.detectUrls) {
-    logger.info(`URL检测已启用，白名单域名: ${config.urlWhitelist.length > 0 ? config.urlWhitelist.join(', ') : '无'}`)
+    logger.debug(`URL检测已启用，白名单域名: ${config.urlWhitelist.length > 0 ? config.urlWhitelist.join(', ') : '无'}`)
   }
 
   // 根据调试模式设置日志级别
   if (config.enableDebugMode) {
     logger.level = 1 // debug级别
-    logger.debug('调试模式已启用，日志级别设置为debug')
+    logger.info('调试模式已启用，日志级别设置为debug')
   } else {
-    logger.level = 2 // info级别
-    logger.info('调试模式未启用，日志级别设置为info')
+    logger.level = 4 // error级别，只显示错误信息
+    logger.info('调试模式未启用，日志级别设置为error')
   }
-
-  logger.info('关键词守门员插件启动中...')
 
   // 初始化数据库
   const database = new KeywordDatabase(ctx)
   const warningManager = new WarningManager(ctx)
 
   // 设置初始调试模式状态
-  if (config.enableDebugMode) {
-    warningManager.setDebugMode(true)
-  }
+  warningManager.setDebugMode(config.enableDebugMode || false)
 
   // 初始化系统预设包
   initializePresetPackages(ctx, database).then(() => {
-    logger.info('系统预设包初始化完成')
+    logger.debug('系统预设包初始化完成')
   }).catch(err => {
     logger.error(`系统预设包初始化失败: ${err.message}`)
   })
@@ -173,38 +175,6 @@ export function apply(ctx: Context, config: Config) {
     .action(async ({ session }) => {
       // 直接显示命令帮助
       return '关键词守门员插件，用于检测和处理群聊中的敏感关键词和非白名单URL。\n\n可用命令：\nkw key - 关键词管理\nkw url - URL白名单管理\nkw warn - 警告记录管理\nkw preset - 预设包管理\nkw group - 群组配置'
-    })
-
-  // 添加调试模式切换命令
-  ctx.command('kw.debug', '调试模式管理')
-    .option('enable', '-e 启用调试模式', { fallback: false })
-    .option('disable', '-d 禁用调试模式', { fallback: false })
-    .action(async ({ session, options }) => {
-      // 检查权限
-      if (!await checkPermission(session, true)) {
-        return '权限不足，需要超级管理员权限才能管理调试模式。'
-      }
-
-      if (options.enable) {
-        // 启用调试模式
-        config.enableDebugMode = true
-        logger.level = 1 // debug级别
-        logger.debug('调试模式已启用，日志级别设置为debug')
-        // 传递调试模式状态给WarningManager
-        warningManager.setDebugMode(true)
-        return '调试模式已启用，将显示更详细的日志信息'
-      } else if (options.disable) {
-        // 禁用调试模式
-        config.enableDebugMode = false
-        logger.level = 2 // info级别
-        logger.info('调试模式已禁用，日志级别设置为info')
-        // 传递调试模式状态给WarningManager
-        warningManager.setDebugMode(false)
-        return '调试模式已禁用，将只显示重要的日志信息'
-      } else {
-        // 显示当前状态
-        return `调试模式当前状态: ${config.enableDebugMode ? '已启用' : '未启用'}\n使用 kw.debug -e 启用调试模式\n使用 kw.debug -d 禁用调试模式`
-      }
     })
 
   // 🔑 关键词管理命令
@@ -403,6 +373,38 @@ export function apply(ctx: Context, config: Config) {
   ctx.command('kw.warn', '关键词警告记录相关命令')
     .action(async ({ session }) => {
       return '警告记录管理命令。\n\n可用的子命令有：\nkw warn my - 查询自己的警告记录\nkw warn myhistory - 查看自己的完整警告历史\nkw warn query <@用户> - 查询指定用户的警告记录\nkw warn history <@用户> - 查看指定用户的完整警告历史\nkw warn reset <@用户> - 清零指定用户的警告记录\n\n管理员专用命令：\nkw warn list - 列出所有有警告记录的用户\nkw warn debug - 查看所有警告记录的详细信息（调试用）\nkw warn sync - 强制同步所有警告记录\nkw warn clear-all - 清空所有警告记录'
+    })
+
+  // 添加调试模式切换命令
+  ctx.command('kw.debug', '调试模式管理')
+    .option('enable', '-e 启用调试模式', { fallback: false })
+    .option('disable', '-d 禁用调试模式', { fallback: false })
+    .action(async ({ session, options }) => {
+      // 检查权限
+      if (!await checkPermission(session, true)) {
+        return '权限不足，需要超级管理员权限才能管理调试模式。'
+      }
+
+      if (options.enable) {
+        // 启用调试模式
+        config.enableDebugMode = true
+        logger.level = 1 // debug级别
+        logger.info('调试模式已启用，日志级别设置为debug')
+        // 传递调试模式状态给WarningManager
+        warningManager.setDebugMode(true)
+        return '调试模式已启用，将显示更详细的日志信息'
+      } else if (options.disable) {
+        // 禁用调试模式
+        config.enableDebugMode = false
+        logger.level = 3 // warn级别
+        logger.info('调试模式已禁用，日志级别设置为warn')
+        // 传递调试模式状态给WarningManager
+        warningManager.setDebugMode(false)
+        return '调试模式已禁用，将只显示重要的警告和错误信息'
+      } else {
+        // 显示当前状态
+        return `调试模式当前状态: ${config.enableDebugMode ? '已启用' : '未启用'}\n使用 kw.debug -e 启用调试模式\n使用 kw.debug -d 禁用调试模式`
+      }
     })
 
   // 查询自己的警告记录

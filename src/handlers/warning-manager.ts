@@ -74,7 +74,7 @@ export class WarningManager {
     if (enable) {
       this.ctx.logger.debug('WarningManager调试日志已启用')
     } else {
-      this.ctx.logger.info('WarningManager调试日志已禁用')
+      this.ctx.logger.debug('WarningManager调试日志已禁用')
     }
   }
 
@@ -111,7 +111,7 @@ export class WarningManager {
       this.dbInitialized = true
       // 只有第一个实例输出info级别日志
       if (this.instanceId === 1) {
-        this.ctx.logger.info('警告记录数据库初始化成功')
+        this.ctx.logger.debug('警告记录数据库初始化成功')
       } else {
         this.logDebug('警告记录数据库初始化成功 (实例 ' + this.instanceId + ')')
       }
@@ -126,11 +126,9 @@ export class WarningManager {
   private async loadWarningsFromDatabase(): Promise<void> {
     try {
       const records = await this.ctx.database.get('keyword_warnings', {})
-      // 只有第一个实例输出info级别日志
+      // 只有第一个实例输出info级别日志，且仅当调试模式开启时输出详细内容
       if (this.instanceId === 1) {
-        this.ctx.logger.info(`从数据库加载了 ${records.length} 条警告记录`)
-      } else {
-        this.logDebug(`从数据库加载了 ${records.length} 条警告记录 (实例 ${this.instanceId})`)
+        this.logDebug(`从数据库加载了 ${records.length} 条警告记录`)
       }
 
       // 清空当前内存中的记录
@@ -146,11 +144,9 @@ export class WarningManager {
         })
       })
 
-      // 只有第一个实例输出info级别日志
-      if (this.instanceId === 1) {
+      // 只在调试模式下输出完成日志
+      if (this.enableDebugLog && this.instanceId === 1) {
         this.ctx.logger.debug('警告记录加载完成')
-      } else {
-        this.logDebug('警告记录加载完成 (实例 ' + this.instanceId + ')')
       }
     } catch (error) {
       this.ctx.logger.error(`加载警告记录失败: ${error.message}`)
@@ -172,7 +168,9 @@ export class WarningManager {
    */
   private logDebug(message: string, ...args: any[]): void {
     if (this.enableDebugLog) {
-      this.ctx.logger.debug(`[警告记录] ${message}`, ...args)
+      // 使用简洁的日志形式，避免过多细节
+      const simpleMsg = message.replace(/\(实例 \d+\)/g, '').trim();
+      this.ctx.logger.debug(`[警告记录] ${simpleMsg}`, ...args)
     }
   }
 
@@ -258,8 +256,10 @@ export class WarningManager {
       }).then(records => records[0])
 
       oldCount = 0; // 新记录的旧计数为0
+      this.ctx.logger.info(`${key}: 创建新警告记录，初始计数=0`)
     } else {
       oldCount = record.count; // 保存现有记录的计数
+      this.ctx.logger.info(`${key}: 找到现有警告记录，当前计数=${oldCount}`)
     }
 
     // 检查是否需要重置记录
@@ -267,11 +267,13 @@ export class WarningManager {
       oldCount = 0; // 重置后的旧计数为0
       record.count = 0;
       this.logDebug(`记录已重置: ${key}`)
+      this.ctx.logger.info(`${key}: 记录已过期，重置计数=0, 上次更新时间=${new Date(record.lastTriggerTime).toLocaleString()}`)
     }
 
     // 增加违规次数 (只增加一次)
     record.count = oldCount + 1;
     record.lastTriggerTime = now;
+    this.ctx.logger.info(`${key}: 增加违规计数，新计数=${record.count}, 时间=${new Date(record.lastTriggerTime).toLocaleString()}`)
 
     // 更新触发信息（如果提供）
     const updateData: any = {
@@ -375,8 +377,10 @@ export class WarningManager {
     if (!this.dbInitialized) await this.initDatabase()
 
     const key = this.getRecordKey(userId, guildId)
-    this.logDebug(`查询记录: ${key}`)
-    this.logDebug(`查询警告记录: ${key}`)
+    // 只在调试模式开启时输出查询日志
+    if (this.enableDebugLog) {
+      this.logDebug(`查询警告记录: ${key}`)
+    }
 
     // 从数据库查询记录
     const records = await this.ctx.database.get('keyword_warnings', {
@@ -384,13 +388,13 @@ export class WarningManager {
       guildId: guildId || ''
     })
 
-    // 打印当前所有记录
-    this.logDebug('当前所有警告记录:')
-    const allRecords = await this.ctx.database.get('keyword_warnings', {})
-    allRecords.forEach(record => {
-      const recordKey = this.getRecordKey(record.userId, record.guildId)
-      this.logDebug(`  ${recordKey}: 次数=${record.count}, 最后时间=${new Date(record.lastTriggerTime).toLocaleString()}`)
-    })
+    // 仅在调试模式下打印所有记录简要信息
+    if (this.enableDebugLog) {
+      const allRecords = await this.ctx.database.get('keyword_warnings', {})
+      if (allRecords.length > 0) {
+        this.logDebug(`数据库中共有 ${allRecords.length} 条警告记录`)
+      }
+    }
 
     // 如果没有记录，创建一个空记录
     if (records.length === 0) {

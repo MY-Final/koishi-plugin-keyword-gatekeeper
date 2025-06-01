@@ -15,13 +15,8 @@ export class KeywordHandler extends MessageHandler {
   }
 
   // 检查是否包含关键词
-  checkKeywords(message: string, keywords: string[], config: PluginConfig): string | null {
+  checkKeywords(message: string, keywords: string[], useRegex: boolean = false, regexFlags: string = 'i'): string | null {
     if (!keywords || keywords.length === 0) return null
-
-    // 减少日志输出，仅在调试模式下显示详细信息
-    if (config.enableDebugMode) {
-      this.ctx.logger.debug(`开始检查关键词，消息内容: "${message.substring(0, 30)}${message.length > 30 ? '...' : ''}", 关键词数量: ${keywords.length}`)
-    }
 
     const lowerMessage = message.toLowerCase()
     for (const keyword of keywords) {
@@ -29,31 +24,17 @@ export class KeywordHandler extends MessageHandler {
 
       try {
         // 使用正则表达式匹配
-        if (config.useRegex) {
-          const flags = config.regexFlags || 'i'
-
-          // 仅在调试模式下记录每个关键词的检测
-          if (config.enableDebugMode) {
-            this.ctx.logger.debug(`使用正则表达式匹配 /${keyword}/${flags}`)
-          }
-
+        if (useRegex) {
+          const flags = regexFlags || 'i'
           const regex = new RegExp(keyword, flags)
           if (regex.test(message)) {
-            this.ctx.logger.info(`正则表达式匹配成功: ${keyword}`)
             return keyword
           }
         }
         // 使用普通文本匹配
         else {
           const lowerKeyword = keyword.toLowerCase();
-
-          // 仅在调试模式下记录每个关键词的检测
-          if (config.enableDebugMode) {
-            this.ctx.logger.debug(`检查普通文本是否包含: "${lowerKeyword}"`)
-          }
-
           if (lowerMessage.includes(lowerKeyword)) {
-            this.ctx.logger.info(`普通文本匹配成功: ${keyword}`)
             return keyword
           }
         }
@@ -63,7 +44,6 @@ export class KeywordHandler extends MessageHandler {
         // 如果正则表达式有错误，尝试使用普通文本匹配
         const lowerKeyword = keyword.toLowerCase();
         if (lowerMessage.includes(lowerKeyword)) {
-          this.ctx.logger.info(`回退到普通文本匹配成功: ${keyword}`)
           return keyword
         }
       }
@@ -118,13 +98,13 @@ export class KeywordHandler extends MessageHandler {
       // 尝试使用 OneBot 的 deleteMsg 方法
       if (meta.messageId && (meta as any).onebot?.deleteMsg) {
         await (meta as any).onebot.deleteMsg(meta.messageId)
-        this.ctx.logger.info(`[${meta.guildId}] 使用 onebot.deleteMsg 撤回成功`)
+        this.ctx.logger.debug(`[${meta.guildId}] 使用 onebot.deleteMsg 撤回成功`)
         return true
       }
       // 使用 bot.deleteMessage 撤回消息
       else if (meta.messageId) {
         await meta.bot.deleteMessage(meta.channelId, meta.messageId)
-        this.ctx.logger.info(`[${meta.guildId}] 使用 bot.deleteMessage 撤回成功`)
+        this.ctx.logger.debug(`[${meta.guildId}] 使用 bot.deleteMessage 撤回成功`)
         return true
       }
       return false
@@ -153,30 +133,30 @@ export class KeywordHandler extends MessageHandler {
   // 禁言用户
   async muteUser(meta: Session, duration: number): Promise<boolean> {
     try {
-      this.ctx.logger.info(`[${meta.guildId}] 尝试禁言用户 ${meta.userId}，时长: ${duration}秒`)
+      this.ctx.logger.debug(`[${meta.guildId}] 尝试禁言用户 ${meta.userId}，时长: ${duration}秒`)
 
       // 尝试使用 OneBot 的 setGroupBan 方法
       if ((meta as any).onebot?.setGroupBan) {
         await (meta as any).onebot.setGroupBan(meta.guildId, meta.userId, duration)
-        this.ctx.logger.info(`[${meta.guildId}] 使用 onebot.setGroupBan 禁言成功`)
+        this.ctx.logger.debug(`[${meta.guildId}] 使用 onebot.setGroupBan 禁言成功`)
         return true
       }
       // 优先使用 bot 对象上的 $setGroupBan 方法（OneBot 适配器）
       else if (meta.bot && typeof meta.bot['$setGroupBan'] === 'function') {
         await meta.bot['$setGroupBan'](meta.guildId, meta.userId, duration)
-        this.ctx.logger.info(`[${meta.guildId}] 使用 bot.$setGroupBan 禁言成功`)
+        this.ctx.logger.debug(`[${meta.guildId}] 使用 bot.$setGroupBan 禁言成功`)
         return true
       }
       // 尝试使用 setGroupBan 方法（可能是 OneBot 适配器）
       else if (meta.bot && typeof meta.bot['setGroupBan'] === 'function') {
         await meta.bot['setGroupBan'](meta.guildId, meta.userId, duration)
-        this.ctx.logger.info(`[${meta.guildId}] 使用 bot.setGroupBan 禁言成功`)
+        this.ctx.logger.debug(`[${meta.guildId}] 使用 bot.setGroupBan 禁言成功`)
         return true
       }
       // 最后尝试通用 API
       else if (meta.bot && typeof meta.bot.muteGuildMember === 'function') {
         await meta.bot.muteGuildMember(meta.guildId, meta.userId, duration)
-        this.ctx.logger.info(`[${meta.guildId}] 使用通用 API 禁言成功`)
+        this.ctx.logger.debug(`[${meta.guildId}] 使用通用 API 禁言成功`)
         return true
       } else {
         this.ctx.logger.warn(`[${meta.guildId}] 无法禁言用户：平台不支持禁言功能或无法获取禁言方法`)
@@ -324,30 +304,6 @@ export class KeywordHandler extends MessageHandler {
     // 检查机器人权限
     const hasBotPermission = await this.checkBotPermission(meta)
 
-    if (!config.enableAutoPunishment) {
-      // 如果未启用自动处罚，则使用原有的处罚逻辑
-      // 撤回消息已在外层handleKeywordDetection中处理，此处不再重复
-
-      if (config.mute) {
-        // 只有机器人有权限时才尝试禁言
-        if (hasBotPermission) {
-          const muted = await this.muteUser(meta, config.muteDuration)
-          if (muted && config.customMessage) {
-            const durationText = this.formatDuration(config.muteDuration)
-            await this.sendNotice(meta, config.customMessage, durationText)
-          }
-        } else {
-          // 如果没有权限，记录日志但不发送消息
-          this.ctx.logger.warn(`[${meta.guildId}] 机器人没有管理权限，无法禁言用户`)
-        }
-      } else if (config.customMessage && hasBotPermission) {
-        // 只有在有权限时才发送提示消息
-        await this.sendNotice(meta, config.customMessage)
-      }
-
-      return true
-    }
-
     // 记录处理前的状态
     const beforeRecord = await this.warningManager.queryUserWarningRecord(meta.userId, config, meta.guildId)
     this.ctx.logger.info(`[${meta.guildId}] 处理前用户 ${meta.userId} 的警告记录: 次数=${beforeRecord.count}`)
@@ -479,63 +435,69 @@ export class KeywordHandler extends MessageHandler {
     return actionTaken
   }
 
-  // 检测到关键词时的处理
-  async handleKeywordDetection(meta: Session, config: PluginConfig): Promise<boolean> {
+  /**
+   * 处理关键词检测
+   * @param meta 消息元数据
+   * @param config 插件配置
+   * @returns 是否检测到关键词
+   */
+  async handleKeywordDetection(meta: any, config: PluginConfig): Promise<boolean> {
     // 获取消息内容
-    const content = this.getMessageContent(meta) || ''
+    let content = this.getMessageContent(meta)
+    if (!content) return false
 
-    // 简化日志，仅记录检测开始
-    this.ctx.logger.info(`[${meta.guildId}] 检测关键词，内容长度: ${content.length}字符`)
+    // 提取关键词列表
+    const keywords = config.keywords || []
 
-    // 使用checkKeywords方法进行检测，而不是简单的includes
-    const matchedKeyword = this.checkKeywords(content, config.keywords, config)
+    // 检测关键词
+    const matchResult = this.checkKeywords(content, keywords, config.useRegex, config.regexFlags)
 
-    if (matchedKeyword) {
-      this.ctx.logger.info(`[${meta.guildId}] 检测到关键词: ${matchedKeyword}`)
+    if (matchResult) {
+      // 只在实际触发时输出简短日志，避免过多细节
+      const shortContent = content.length > 20 ? content.substring(0, 20) + '...' : content
+      if (config.enableDebugMode) {
+        this.ctx.logger.info(`检测到关键词: ${matchResult}`)
+        this.ctx.logger.debug(`内容长度: ${content.length}字符`)
+      }
 
       // 检查机器人权限
       const hasBotPermission = await this.checkBotPermission(meta)
 
-      // 确保优先执行撤回操作，无论后续处理如何
-      let recallResult = false;
+      // 优先执行撤回操作
       if (config.recall) {
-        recallResult = await this.recallMessage(meta);
-        this.ctx.logger.info(`[${meta.guildId}] 关键词"${matchedKeyword}"触发撤回: ${recallResult ? '成功' : '失败'}`);
+        await this.recallMessage(meta)
       }
 
-      // 根据撤回结果和机器人权限，决定是否继续其他处罚
-      if (!hasBotPermission) {
-        this.ctx.logger.warn(`[${meta.guildId}] 机器人没有管理权限，只能执行撤回操作，跳过其他处罚`);
-        return recallResult; // 如果只撤回成功也算处理成功
-      }
-
-      // 如果启用自动处罚
+      // 根据是否启用自动处罚机制选择处理方式
       if (config.enableAutoPunishment) {
-        return await this.handleAutoPunishment(meta, config, matchedKeyword)
-      }
+        // 使用自动处罚机制（升级处罚）
+        return await this.handleAutoPunishment(meta, config, matchResult)
+      } else {
+        // 使用简单处罚逻辑
+        if (config.mute && hasBotPermission) {
+          await this.muteUser(meta, config.muteDuration)
 
-      // 如果未启用自动处罚，则使用原有的处罚逻辑
-      if (config.mute && hasBotPermission) {
-        // 使用基类的muteUser方法而不是直接调用API
-        const muted = await this.muteUser(meta, config.muteDuration)
-        if (muted) {
-          this.ctx.logger.info(`[${meta.guildId}] 用户 ${meta.userId} 因触发关键词 "${matchedKeyword}" 已被禁言 ${config.muteDuration} 秒`)
-          if (config.customMessage) {
-            const durationText = this.formatDuration(config.muteDuration)
-            await this.sendNotice(meta, config.customMessage, durationText)
-          }
+          // 更新处罚记录
+          await this.warningManager.updateUserPunishmentRecord(
+            meta.userId,
+            config,
+            meta.guildId,
+            {
+              keyword: matchResult,
+              type: 'keyword',
+              action: 'mute',
+              messageContent: content
+            }
+          )
         }
-      } else if (config.customMessage && hasBotPermission) {
-        await this.sendNotice(meta, config.customMessage)
+
+        // 发送提示消息
+        if (config.customMessage && hasBotPermission) {
+          await this.sendNotice(meta, config.customMessage)
+        }
       }
 
-      // 如果有撤回操作，即使其他处罚失败也算处理成功
-      return recallResult || true;
-    } else {
-      // 减少不必要的日志输出
-      if (config.enableDebugMode) {
-        this.ctx.logger.debug(`[${meta.guildId}] 未检测到关键词`)
-      }
+      return true
     }
 
     return false

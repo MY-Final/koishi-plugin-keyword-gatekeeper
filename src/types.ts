@@ -71,6 +71,8 @@ export interface Config {
   allowCustomPresets: boolean
   // 是否启用调试模式
   enableDebugMode: boolean
+  // 是否跳过对管理员的检查
+  skipAdminCheck: boolean
 }
 
 // 配置模式
@@ -129,7 +131,7 @@ export const ConfigSchema: Schema<Config> = Schema.intersect([
   Schema.object({
     enableAutoPunishment: Schema.boolean()
       .description('是否启用自动处罚机制，根据用户触发次数自动升级处罚等级')
-      .default(false),
+      .default(true),
     secondViolationMuteDuration: Schema.number()
       .description('第二次违规的禁言时长（秒），默认为60秒')
       .min(10)
@@ -192,4 +194,10 @@ export const ConfigSchema: Schema<Config> = Schema.intersect([
       .description('是否启用调试模式，开启后将显示更详细的日志信息，用于排查问题')
       .default(false),
   }).description('调试设置'),
+
+  Schema.object({
+    skipAdminCheck: Schema.boolean()
+      .description('是否跳过对管理员的检查，默认跳过')
+      .default(true),
+  }).description('管理员检查设置'),
 ])
