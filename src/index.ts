@@ -754,7 +754,7 @@ export function apply(ctx: Context, config: Config) {
         return '权限不足，需要管理员权限才能使用预设包管理功能。'
       }
 
-      return '预设包管理命令。\n\n可用的子命令有：\nkw preset list - 列出所有预设包\nkw preset view <名称> - 查看预设包内容\nkw preset create <名称> <描述> - 创建预设包\nkw preset import <名称> - 导入预设包\nkw preset delete <名称> - 删除预设包'
+      return '预设包管理命令。\n\n可用的子命令有：\nkw preset list - 列出所有预设包\nkw preset view <名称> - 查看预设包内容\nkw preset create <名称> <描述> - 创建预设包\nkw preset import <名称> - 导入预设包\nkw preset unimport <名称> - 从群组中移除预设包\nkw preset imported - 查看当前群组已导入的预设包\nkw preset delete <名称> - 删除预设包'
     })
 
   // 列出所有预设包
@@ -973,6 +973,165 @@ export function apply(ctx: Context, config: Config) {
       await database.updateGroupConfig(session.guildId, { keywords: groupConfig.keywords })
 
       return `已成功导入预设包"${preset.name}"，添加了 ${importCount} 个新关键词到当前群组。`
+    })
+
+  // 从群组移除预设包
+  ctx.command('kw.preset.unimport <name:string>', '从当前群组移除预设包')
+    .action(async ({ session }, name) => {
+      // 检查权限
+      if (!await checkPermission(session)) {
+        return '你没有权限从群组移除预设包。'
+      }
+
+      // 检查是否在群聊中
+      if (!session.guildId) {
+        return '此命令只能在群聊中使用。'
+      }
+
+      // 检查是否启用了群组特定配置
+      if (!config.enableGroupSpecificConfig) {
+        return '未启用群组特定配置功能，请先在插件设置中开启"启用群组特定配置"选项。'
+      }
+
+      if (!name) {
+        return '请提供要移除的预设包名称。使用 kw preset imported 查看已导入的预设包。'
+      }
+
+      // 查找预设包
+      const presets = await database.getAllPresetPackages()
+
+      // 尝试精确匹配和模糊匹配
+      let preset = presets.find(p => p.name === name)
+
+      // 如果找不到精确匹配，尝试模糊匹配（支持中文名称查询）
+      if (!preset) {
+        const nameMap = {
+          '广告': 'common',
+          '违禁词': 'common',
+          '常见': 'common',
+          '博彩': 'gambling',
+          '赌博': 'gambling',
+          '色情': 'adult',
+          '成人': 'adult',
+          '政治': 'politics',
+          '敏感': 'politics',
+          '诈骗': 'scam',
+          '网络诈骗': 'scam',
+          '垃圾': 'spam',
+          '垃圾信息': 'spam',
+          '违禁品': 'illegal',
+          '非法': 'illegal',
+          '网址': 'url-blacklist',
+          '链接': 'url-blacklist'
+        }
+
+        // 从映射中查找
+        for (const [key, value] of Object.entries(nameMap)) {
+          if (name.includes(key)) {
+            preset = presets.find(p => p.name === value)
+            if (preset) break
+          }
+        }
+      }
+
+      if (!preset) {
+        return `找不到名为"${name}"的预设包。使用 kw preset list 查看所有预设包。`
+      }
+
+      // 获取群组配置
+      let groupConfig = await database.getGroupConfig(session.guildId)
+
+      // 如果配置不存在或未启用，返回错误
+      if (!groupConfig || !groupConfig.enabled) {
+        return '当前群组未启用关键词守门员配置。'
+      }
+
+      // 移除预设包中的关键词
+      const originalKeywordsCount = groupConfig.keywords.length;
+      const newKeywords = groupConfig.keywords.filter(keyword => !preset.keywords.includes(keyword));
+
+      // 如果没有关键词被移除，则返回提示
+      if (newKeywords.length === originalKeywordsCount) {
+        return `当前群组中没有找到预设包"${preset.name}"中的任何关键词。`
+      }
+
+      // 更新群组配置
+      await database.updateGroupConfig(session.guildId, { keywords: newKeywords });
+
+      return `成功从当前群组中移除预设包"${preset.name}"，共移除 ${originalKeywordsCount - newKeywords.length} 个关键词。`;
+    })
+
+  // 查看已导入的预设包
+  ctx.command('kw.preset.imported', '查看当前群组已导入的预设包')
+    .action(async ({ session }) => {
+      // 检查权限
+      if (!await checkPermission(session)) {
+        return '你没有权限查看群组导入的预设包。'
+      }
+
+      // 检查是否在群聊中
+      if (!session.guildId) {
+        return '此命令只能在群聊中使用。'
+      }
+
+      // 检查是否启用了群组特定配置
+      if (!config.enableGroupSpecificConfig) {
+        return '未启用群组特定配置功能，请先在插件设置中开启"启用群组特定配置"选项。'
+      }
+
+      // 获取群组配置
+      const groupConfig = await database.getGroupConfig(session.guildId)
+      if (!groupConfig) {
+        return `当前群组未配置关键词守门员。`
+      }
+
+      // 如果群组没有启用，则返回错误
+      if (!groupConfig.enabled) {
+        return `当前群组未启用关键词守门员。`
+      }
+
+      // 获取所有预设包
+      const allPresets = await database.getAllPresetPackages()
+      if (!allPresets || allPresets.length === 0) {
+        return '当前系统中没有可用的预设包。'
+      }
+
+      // 查找哪些预设包的关键词存在于群组配置中
+      const importedPresets = [];
+      const groupKeywords = groupConfig.keywords || [];
+
+      if (groupKeywords.length === 0) {
+        return `当前群组未导入任何关键词。`
+      }
+
+      // 遍历所有预设包，检查每个预设包的关键词是否都包含在群组关键词中
+      for (const preset of allPresets) {
+        // 检查预设包的关键词在群组关键词中出现的数量
+        const matchedKeywords = preset.keywords.filter(kw => groupKeywords.includes(kw));
+        if (matchedKeywords.length > 0) {
+          importedPresets.push({
+            name: preset.name,
+            description: preset.description,
+            totalKeywords: preset.keywords.length,
+            matchedKeywords: matchedKeywords.length,
+          });
+        }
+      }
+
+      if (importedPresets.length === 0) {
+        return `当前群组未导入任何预设包，现有的 ${groupKeywords.length} 个关键词均为手动添加。`
+      }
+
+      // 构建回复
+      let result = `当前群组已导入的预设包：\n\n`;
+      importedPresets.forEach((preset, index) => {
+        result += `${index + 1}. ${preset.name}：${preset.description}\n`;
+        result += `   匹配关键词：${preset.matchedKeywords}/${preset.totalKeywords}\n`;
+      });
+
+      result += `\n群组共有 ${groupKeywords.length} 个关键词，其中一些关键词可能来自多个预设包。\n使用 kw preset unimport <名称> 来移除特定预设包。`;
+
+      return result;
     })
 
   // 创建预设包

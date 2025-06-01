@@ -49,7 +49,8 @@ export function registerPresetCommands(ctx: Context, config: Config, database: K
 - kwpreset remove <名称> <关键词> - 从预设包移除关键词
 - kwpreset delete <名称> - 删除预设包
 - kwpreset import <名称> [群组ID] - 将预设包导入到群组
-- kwpreset unimport <名称> [群组ID] - 从群组中移除预设包`
+- kwpreset unimport <名称> [群组ID] - 从群组中移除预设包
+- kwpreset imported [群组ID] - 查看群组已导入的预设包`
     })
 
   // 列出所有预设包
@@ -363,5 +364,74 @@ export function registerPresetCommands(ctx: Context, config: Config, database: K
       await database.updateGroupConfig(targetGuildId, { keywords: newKeywords });
 
       return `成功从群组 ${targetGuildId} 中移除预设包 "${name}"，共移除 ${originalKeywordsCount - newKeywords.length} 个关键词。`;
+    })
+
+  // 查看群组已导入的预设包
+  presetCmd.subcommand('imported [guildId:string]', '查看当前群组或指定群组已导入的预设包')
+    .action(async ({ session }, guildId) => {
+      // 使用当前群组ID或指定的群组ID
+      const targetGuildId = guildId || session.guildId
+      if (!targetGuildId) {
+        return '请在群组中使用此命令，或指定目标群组ID。'
+      }
+
+      // 检查权限
+      if (!await checkPermission(session)) {
+        return '你没有权限查看群组导入的预设包。'
+      }
+
+      // 获取群组配置
+      const groupConfig = await database.getGroupConfig(targetGuildId)
+      if (!groupConfig) {
+        return `群组 ${targetGuildId} 未配置关键词守门员。`
+      }
+
+      // 如果群组没有启用，则返回错误
+      if (!groupConfig.enabled) {
+        return `群组 ${targetGuildId} 未启用关键词守门员。`
+      }
+
+      // 获取所有预设包
+      const allPresets = await database.getAllPresetPackages()
+      if (!allPresets || allPresets.length === 0) {
+        return '当前系统中没有可用的预设包。'
+      }
+
+      // 查找哪些预设包的关键词存在于群组配置中
+      const importedPresets = [];
+      const groupKeywords = groupConfig.keywords || [];
+
+      if (groupKeywords.length === 0) {
+        return `群组 ${targetGuildId} 未导入任何关键词。`
+      }
+
+      // 遍历所有预设包，检查每个预设包的关键词是否都包含在群组关键词中
+      for (const preset of allPresets) {
+        // 检查预设包的关键词在群组关键词中出现的数量
+        const matchedKeywords = preset.keywords.filter(kw => groupKeywords.includes(kw));
+        if (matchedKeywords.length > 0) {
+          importedPresets.push({
+            name: preset.name,
+            description: preset.description,
+            totalKeywords: preset.keywords.length,
+            matchedKeywords: matchedKeywords.length,
+          });
+        }
+      }
+
+      if (importedPresets.length === 0) {
+        return `群组 ${targetGuildId} 未导入任何预设包，现有的 ${groupKeywords.length} 个关键词均为手动添加。`
+      }
+
+      // 构建回复
+      let result = `群组 ${targetGuildId} 已导入的预设包：\n\n`;
+      importedPresets.forEach((preset, index) => {
+        result += `${index + 1}. ${preset.name}：${preset.description}\n`;
+        result += `   匹配关键词：${preset.matchedKeywords}/${preset.totalKeywords}\n`;
+      });
+
+      result += `\n群组共有 ${groupKeywords.length} 个关键词，其中一些关键词可能来自多个预设包。\n使用 kwpreset unimport <名称> 来移除特定预设包。`;
+
+      return result;
     })
 }
